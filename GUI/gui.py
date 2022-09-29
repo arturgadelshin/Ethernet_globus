@@ -45,46 +45,83 @@ class StageThread(QtCore.QThread):
             #self.thread_receive_data.emit(receive_data)
 
 
+class MDIWindow(QMainWindow): # Использовать для основного окна
+    count = 0
+    #setCentralWidget(mdi)
 
-class SettingWindow(QtWidgets.QWidget):
-    def __init__(self, parent = None):
-        super(SettingWindow, self).__init__(parent)
-        self.layout = QGridLayout()  # Создание сетки  1 - Основная
-        # Блок первый
-        self.oneblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
-        self.nmb_channel = QtWidgets.QLabel('Номер канала')
-        self.nmb_channel= QtWidgets.QLineEdit()
-        self.nmb_channel.setFixedWidth(115)
-        # self.add_addr_IP.setInputMask('DDD.999.999.999;#') # Убрать!
-        # self.nmb_channel.setText('1')
+    """Main Window."""
+    def __init__(self, parent=None):
+        """Initializer."""
+        super().__init__(parent)
+        #self.setCentralWidget(CentralWindow()) # Вызов в центральный виджет своего виджета
+        global mdi
+        self.mdi = QMdiArea()
+        self.setCentralWidget(self.mdi)
 
-        self.step = QtWidgets.QLabel('Шаг')
-        self.step = QtWidgets.QLineEdit()
-        self.step.setFixedWidth(115)
-        self.nmb_channel.setText('1')
-
-        self.vector_calibrate = QtWidgets.QLabel('Направление калибровки')
-        self.vector_calibrate = QtWidgets.QLineEdit()
-        self.vector_calibrate.setFixedWidth(115)
+        self._createMenu()
+        #self._createToolBar()
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
 
 
-        # Фомирование первого блока интерфейса
 
-        self.oneblock.addWidget(self.nmb_channel, Qt.AlignLeft)
-        self.oneblock.addWidget(self.step, Qt.AlignJustify)
-        self.button_addition.setEnabled(False)  # Заблокировать кнопку
-        self.button_option.setEnabled(False)  # Заблокировать кнопку
-        #self.button_OK.clicked.connect(self.on_connect)
-        self.oneblock.addStretch(100)
-        self.layout.addLayout(self.oneblock, 0, 0, 1, 2)
+    def _createMenu(self):
+        self.menu_1 = self.menuBar().addMenu("&Меню")
+        self.menu_1.addAction('&Проверка по ТУ', self.prov_tu)
+        self.menu_1.addAction('&Калибровка', self.calibrate)
+        self.menu_1.addAction('&Выход', self.close)
+        self.menu_2 = self.menuBar().addMenu("&Вид")
+        self.menu_2.addAction('&Каскад', self.window_cascade)
+        self.menu_2.addAction('&Плитка', self.window_tiled)
+        #self.menu.triggered[QAction].connect(self.prov_tu())
 
+    def window_cascade(self):
+        self.mdi.cascadeSubWindows()
 
+    def window_tiled(self):
+        self.mdi.tileSubWindows()
+
+    def prov_tu(self):
+        #MDIWindow.count = MDIWindow.count + 1
+        sub = QMdiSubWindow()
+        sub.setWidget(CentralWindow())
+        self.mdi.addSubWindow(sub)
+        sub.show()
+
+    def calibrate(self):
+        sub = QMdiSubWindow()
+        sub.setWidget(CalibrateWindow())
+        self.mdi.addSubWindow(sub)
+        sub.show()
+
+    def calibrate_1(self):
+        sub = QMdiSubWindow()
+        sub.setWidget(CalibrateWindow())
+        md = MDIWindow()
+        #md.mdi.addSubWindow(sub)
+        mdi = md.mdi.addSubWindow(sub)
+        sub.show()
+
+    def _createToolBar(self):
+        tools = QToolBar()
+        self.addToolBar(tools)
+        tools.addAction('Настройка', self.close)
+        tools.addAction('Выход', self.close)
+
+    def _createStatusBar(self, text):
+        print(text)
+        self.statusBar.showMessage(text, 1)
+
+    def _clearMessage(self):
+        print('ggg')
+        #self.status.clearMessage()
+        #self._createStatusBar.clearMessage()
 
 
 class CentralWindow(QtWidgets.QWidget): # Использовать для других окон
     # Ниже список с параметрами из st - экземпляра объекта Stage_01
     interface_param = [QStandardItem(Stages_01().name_param_01), QStandardItem(Stages_01().name_param_02),
-                      QStandardItem(Stages_01().name_param_03), QStandardItem(Stages_01().name_param_04)]
+                       QStandardItem(Stages_01().name_param_03), QStandardItem(Stages_01().name_param_04)]
 
     """Central Window"""
     def __init__(self, parent=None):
@@ -109,8 +146,8 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         self.button_OK.setFixedWidth(100)
         self.button_addition = QtWidgets.QPushButton("Дополнительно")
         self.button_addition.setFixedWidth(100)
-        self.button_option = QtWidgets.QPushButton("Калибровка")
-        self.button_option.setFixedWidth(100)
+        self.button_calibrate = QtWidgets.QPushButton("Калибровка")
+        self.button_calibrate.setFixedWidth(100)
 
         # self.kostil = QtWidgets.QLineEdit()
         # self.kostil.setEnabled(False)
@@ -125,13 +162,13 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         self.oneblock = QtWidgets.QHBoxLayout() # Создаем горизонтальный контейнер 1
         self.oneblock.addWidget(self.addr_IP, Qt.AlignLeft)
         self.oneblock.addWidget(self.add_addr_IP, Qt.AlignJustify)
-        self.oneblock.addWidget(self.port_IP, Qt.AlignLeft )
-        self.oneblock.addWidget(self.add_port_IP, Qt.AlignLeft )
+        self.oneblock.addWidget(self.port_IP, Qt.AlignLeft)
+        self.oneblock.addWidget(self.add_port_IP, Qt.AlignLeft)
         self.oneblock.addWidget(self.button_OK, Qt.AlignLeft)
         self.oneblock.addWidget(self.button_addition, Qt.AlignLeft)
-        self.oneblock.addWidget(self.button_option, Qt.AlignLeft)
+        self.oneblock.addWidget(self.button_calibrate, Qt.AlignLeft)
         self.button_addition.setEnabled(False)  # Заблокировать кнопку
-        self.button_option.setEnabled(False)  # Заблокировать кнопку
+        self.button_calibrate.setEnabled(False)  # Заблокировать кнопку
         self.button_OK.clicked.connect(self.on_connect)
         self.oneblock.addStretch(100)
         self.layout.addLayout(self.oneblock, 0, 0, 1, 2)
@@ -202,8 +239,8 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
 
-        # Вывод содержимого сетки на экран
-        self.setLayout(self.layout)
+        # # Вывод содержимого сетки на экран
+        # self.setLayout(self.layout)
 
         # Ниже описание и настройка потока для работы с ЭМ1
         self.stage_thread = StageThread() # Содаем экземпляр класса StageThread
@@ -241,8 +278,9 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
 
             self.header_stage.appendRow(i)  # Вывод строк для дерева списка
 
-        self.button_addition.setEnabled(True)  # Заблокировать кнопку
-        self.button_option.setEnabled(True)  # Заблокировать кнопку
+        self.button_addition.setEnabled(True)  # Раблокировать кнопку
+        self.button_calibrate.setEnabled(True)  # Раблокировать кнопку
+        self.button_calibrate.clicked.connect(MDIWindow.calibrate_1)
         self.model.setHorizontalHeaderLabels(['Наименование проверок', 'Результат'])
         self.treeView.setModel(self.model)  # Вывод дерева списка
         self.treeView.setColumnWidth(0, 350)  # Задать ширину 1 столбца
@@ -303,62 +341,51 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
             i.setCheckState(2)   # Задание по умолчанию флаг активен
             self.header_stage.appendRow(i)  # Вывод строк для дерева списка
 
+    def calibrate(self):
+        pass
 
-class MDIWindow(QMainWindow): # Использовать для основного окна
-    count  = 0
-    """Main Window."""
+
+class CalibrateWindow(MDIWindow,QtWidgets.QWidget):
     def __init__(self, parent=None):
-        """Initializer."""
         super().__init__(parent)
-        #self.setCentralWidget(CentralWindow()) # Вызов в центральный виджет своего виджета
+        self.layout = QGridLayout()  # Создание сетки - Основная
+
+        # Блок первый
+        self.oneblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
+        self.nmb_channel = QtWidgets.QLabel('Номер канала')
+        self.nmb_channel = QtWidgets.QLineEdit()
+        self.nmb_channel.setFixedWidth(50)
+        # self.add_addr_IP.setInputMask('DDD.999.999.999;#') # Убрать!
+        # self.nmb_channel.setText('1')
+
+        self.step = QtWidgets.QLabel('Шаг')
+        self.step = QtWidgets.QLineEdit()
+        self.step.setFixedWidth(50)
+
+        self.vector_calibrate = QtWidgets.QLabel('Направление калибровки')
+        self.vector_calibrate = QtWidgets.QLineEdit()
+        self.vector_calibrate.setFixedWidth(50)
+        self.vector_calibrate.setText('1')
 
 
-        self.mdi = QMdiArea()
-        self.setCentralWidget(self.mdi)
+        # Фомирование первого блока интерфейса
 
-        self._createMenu()
-        #self._createToolBar()
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-
-
-    def _createMenu(self):
-        self.menu_1 = self.menuBar().addMenu("&Меню")
-        self.menu_1.addAction('&Проверка по ТУ', self.prov_tu)
-        self.menu_1.addAction('&Настройка')
-        self.menu_1.addAction('&Выход', self.close)
-        self.menu_2 = self.menuBar().addMenu("&Вид")
-        self.menu_2.addAction('&Каскад', self.window_cascade)
-        self.menu_2.addAction('&Плитка', self.window_tiled)
-        #self.menu.triggered[QAction].connect(self.prov_tu())
-
-    def window_cascade(self):
-        self.mdi.cascadeSubWindows()
-
-    def window_tiled(self):
-        self.mdi.tileSubWindows()
-
-    def prov_tu(self):
-        #MDIWindow.count = MDIWindow.count + 1
-        sub = QMdiSubWindow()
-        sub.setWidget(CentralWindow())
-        self.mdi.addSubWindow(sub)
-        sub.show()
-
-    def _createToolBar(self):
-        tools = QToolBar()
-        self.addToolBar(tools)
-        tools.addAction('Настройка',self.close())
-        tools.addAction('Выход', self.close)
-
-    def _createStatusBar(self, text):
-        print(text)
-        self.statusBar.showMessage(text, 1)
+        self.oneblock.addWidget(self.nmb_channel, Qt.AlignLeft)
+        self.oneblock.addWidget(self.step, Qt.AlignJustify)
+        self.oneblock.addWidget(self.vector_calibrate, Qt.AlignJustify)
+#
+        #self.button_OK.clicked.connect(self.on_connect)
+        self.oneblock.addStretch(100)
+        self.layout.addLayout(self.oneblock, 0, 0, 1, 2)
 
 
-    def _clearMessage(self):
-        print('ggg')
-        #self.status.clearMessage()
-        #self._createStatusBar.clearMessage()
+        # Вывод содержимого сетки на экран
+        self.setLayout(self.layout)
+
+
+
+
+
+
 
 
