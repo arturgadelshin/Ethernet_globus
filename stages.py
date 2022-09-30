@@ -86,6 +86,17 @@ class Stage_02:
         pass
 
 
+class Calibrate:
+    pars = Parsing()  # Создание объекта Парсера, для распарсивания принятых пакетов
+    recieve_data = WindowParsing()
+
+    def __init__(self):
+        ...
+
+    def write_voltage_for_calibrate(self, step, vector, channel):
+        write = calibrate(step, vector, channel)
+        Ethernet().swap(write)
+
 
 #eth = Ethernet('192.168.0.1', 1233)
 

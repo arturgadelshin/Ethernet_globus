@@ -1,6 +1,7 @@
 import struct
 import re
 from ast import literal_eval
+from parsing_ethernet import convert_base
 
 # Здесь будут отписаны все базовые интерфейсные функции
 
@@ -282,6 +283,7 @@ def setting_em(mask, write_data):
     msg = (code_command + reserved + mask_ + data)
     return msg
 
+
 """
 Команда настройки ЭМ предназначена для управления 
 программно-управляемыми характеристиками ЭМ и реализуется в ЭМ в 
@@ -326,6 +328,7 @@ def smk(write_data):
     msg = (code_command + reserved + data)
     return msg
 
+
 """
 Команда предназначена для запуска встроенного самоконтроля ЭМ 
 (алгоритм самоконтроля определяется КД и/или ПД на конкретный ЭМ).
@@ -347,9 +350,22 @@ def smk(write_data):
 """
 
 
+def calibrate(step, vector, channel):
+    code_command = [80]
+    reserved = [0]
+    data = [step, vector]
 
-    
+    if channel < 255:
+        data.append(channel)
+        data.append(0)
+    else:
+        rez = channel.to_bytes((channel.bit_length() + 7) // 8, 'big')
+        data.append(rez[1])
+        data.append(rez[0])
+    msg = (code_command + reserved + data)
+    return msg
+
 # print(replace_ip('192.168.0.2'))
-#print(read_data_any_addr("FC7F0020", "0400"))
-#print(write_data_any_addr("007F0020", "0400", "AAAAAAAA"))
-#print(write_32_bit_mask("FC7F0020", "AAAAAAAA", "5555FFFF"))
+# print(read_data_any_addr("FC7F0020", "0400"))
+# print(write_data_any_addr("007F0020", "0400", "AAAAAAAA"))
+# print(write_32_bit_mask("FC7F0020", "AAAAAAAA", "5555FFFF"))

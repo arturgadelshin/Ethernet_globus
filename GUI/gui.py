@@ -46,26 +46,22 @@ class StageThread(QtCore.QThread):
 
 
 class MDIWindow(QMainWindow): # Использовать для основного окна
-    count = 0
-    #setCentralWidget(mdi)
 
     """Main Window."""
     def __init__(self, parent=None):
         """Initializer."""
         super().__init__(parent)
         #self.setCentralWidget(CentralWindow()) # Вызов в центральный виджет своего виджета
-        global mdi
         self.mdi = QMdiArea()
         self.setCentralWidget(self.mdi)
 
-        self._createMenu()
+        self.createMenu()
         #self._createToolBar()
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
 
 
-
-    def _createMenu(self):
+    def createMenu(self):
         self.menu_1 = self.menuBar().addMenu("&Меню")
         self.menu_1.addAction('&Проверка по ТУ', self.prov_tu)
         self.menu_1.addAction('&Калибровка', self.calibrate)
@@ -84,23 +80,23 @@ class MDIWindow(QMainWindow): # Использовать для основног
     def prov_tu(self):
         #MDIWindow.count = MDIWindow.count + 1
         sub = QMdiSubWindow()
-        sub.setWidget(CentralWindow())
+        sub.setWidget(CentralWindow(self.mdi))
         self.mdi.addSubWindow(sub)
         sub.show()
 
     def calibrate(self):
         sub = QMdiSubWindow()
-        sub.setWidget(CalibrateWindow())
+        sub.setWidget(CalibrateWindow(self.mdi))
         self.mdi.addSubWindow(sub)
         sub.show()
 
-    def calibrate_1(self):
-        sub = QMdiSubWindow()
-        sub.setWidget(CalibrateWindow())
-        md = MDIWindow()
-        #md.mdi.addSubWindow(sub)
-        mdi = md.mdi.addSubWindow(sub)
-        sub.show()
+        # MDIWindow().sub_1.setVisible(True)
+        # QWidget.activateWindow(CalibrateWindow)
+        # sub_1 = QMdiSubWindow()
+        # sub_1.setWidget(CalibrateWindow(self.mdi))
+        # self.mdi.addSubWindow(sub_1)
+        # # sub_1.show()
+        # sub_1.show()
 
     def _createToolBar(self):
         tools = QToolBar()
@@ -248,7 +244,6 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         self.stage_thread.finished.connect(self.on_finished)
         self.stage_thread.thread_signal.connect(self.on_change, QtCore.Qt.QueuedConnection)
         self.stage_thread.thread_receive_data.connect(self.log_update, QtCore.Qt.QueuedConnection)
-
         #sub.setWidget(self.setLayout(self.layout))
         #sub.show()
 
@@ -280,7 +275,7 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
 
         self.button_addition.setEnabled(True)  # Раблокировать кнопку
         self.button_calibrate.setEnabled(True)  # Раблокировать кнопку
-        self.button_calibrate.clicked.connect(MDIWindow.calibrate_1)
+        self.button_calibrate.clicked.connect(self.calibrate)
         self.model.setHorizontalHeaderLabels(['Наименование проверок', 'Результат'])
         self.treeView.setModel(self.model)  # Вывод дерева списка
         self.treeView.setColumnWidth(0, 350)  # Задать ширину 1 столбца
@@ -342,47 +337,60 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
             self.header_stage.appendRow(i)  # Вывод строк для дерева списка
 
     def calibrate(self):
-        pass
+        #sub = QMdiSubWindow()
+
+        sub = QMainWindow()
+        sub.setCentralWidget(CalibrateWindow())
+        sub.addDockWidget()
+        sub.widge
+        sub.setFixedWidth(600)
+        sub.setWidget(CalibrateWindow())
+        #self.mdi.addSubWindow(sub)
+        sub.show()
+        #CalibrateWindow()
 
 
-class CalibrateWindow(MDIWindow,QtWidgets.QWidget):
+class CalibrateWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QGridLayout()  # Создание сетки - Основная
 
         # Блок первый
         self.oneblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
-        self.nmb_channel = QtWidgets.QLabel('Номер канала')
+
+        self.nmb_label = QtWidgets.QLabel("Номер канала")
         self.nmb_channel = QtWidgets.QLineEdit()
         self.nmb_channel.setFixedWidth(50)
-        # self.add_addr_IP.setInputMask('DDD.999.999.999;#') # Убрать!
-        # self.nmb_channel.setText('1')
 
-        self.step = QtWidgets.QLabel('Шаг')
+        self.step_label = QtWidgets.QLabel('Шаг')
         self.step = QtWidgets.QLineEdit()
         self.step.setFixedWidth(50)
 
-        self.vector_calibrate = QtWidgets.QLabel('Направление калибровки')
+        self.vector_label = QtWidgets.QLabel('Направление калибровки')
         self.vector_calibrate = QtWidgets.QLineEdit()
         self.vector_calibrate.setFixedWidth(50)
         self.vector_calibrate.setText('1')
-
+        self.button_write_voltage = QtWidgets.QPushButton("Установить напряжение")
+        self.button_write_voltage.setFixedWidth(150)
 
         # Фомирование первого блока интерфейса
 
+        self.oneblock.addWidget(self.nmb_label, Qt.AlignLeft)
         self.oneblock.addWidget(self.nmb_channel, Qt.AlignLeft)
+        self.oneblock.addWidget(self.step_label, Qt.AlignLeft)
         self.oneblock.addWidget(self.step, Qt.AlignJustify)
+        self.oneblock.addWidget(self.vector_label, Qt.AlignJustify)
         self.oneblock.addWidget(self.vector_calibrate, Qt.AlignJustify)
-#
+        self.oneblock.addWidget(self.button_write_voltage, Qt.AlignJustify)
+
         #self.button_OK.clicked.connect(self.on_connect)
+
         self.oneblock.addStretch(100)
-        self.layout.addLayout(self.oneblock, 0, 0, 1, 2)
+        self.layout.addLayout(self.oneblock, 0, 0, 0, 0)
 
 
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
-
-
 
 
 
