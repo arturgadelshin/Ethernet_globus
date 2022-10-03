@@ -87,15 +87,112 @@ class Stage_02:
 
 
 class Calibrate:
+    """ Класс который описывает калибровку каждого канала """
     pars = Parsing()  # Создание объекта Парсера, для распарсивания принятых пакетов
     recieve_data = WindowParsing()
 
     def __init__(self):
+        # Может сюда стоит добавить команду сброса soft ?
         ...
 
     def write_voltage_for_calibrate(self, step, vector, channel):
-        write = calibrate(step, vector, channel)
-        Ethernet().swap(write)
+        write = calibrate(dec(step), dec(vector), dec(channel))  # code command 0x80
+        data = Ethernet().swap(write)
+        must_be_bytes = {
+            2: [1],
+            12: [10],  # 0x0A
+            14: [10],  # 0x0A
+            20: [128],  # 0x80
+            21: [1],
+        }
+        must_be = 5
+        for i, byte in enumerate(data):
+            if byte == must_be_bytes[i]:
+                try:
+                    must_be -= 1
+                except KeyError:
+                    continue
+        if must_be == 0:
+            print(f"Команда {bytes(must_be_bytes[20])} выполнена")
+        else:
+            print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
+
+        # Чтение данных командой запрос данных
+        write = data_request(0)
+        data = Ethernet().swap(write)
+        must_be_bytes = {
+            2: [1],
+            12: [10],  # 0x0A
+            14: [10],  # 0x0A
+            20: [4],  # 0x80
+            21: [1],
+        }
+        must_be = 5
+        for i, byte in enumerate(data):
+            if byte == must_be_bytes[i]:
+                try:
+                    must_be -= 1
+                except KeyError:
+                    continue
+        if must_be == 0:
+            print(f"Команда {bytes(must_be_bytes[20])} выполнена")
+        else:
+            print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
+
+        frame = data[22:30]  # frame так сказал Юрий Иваныч Атаманчук
+        channel_read = data[30]
+        step_read = data[31]
+        combined_byte = data[32]
+        reserved = data[33]
+        code_dac_1 = data[34:36]
+        code_dac_2 = data[36:38]
+        if step == step_read and channel == channel_read:
+            print("Команда отработана верно")
+        else:
+            print("Команда отработана неверно")
+
+        # возможно придется преобразовать принятый байт в bin()
+        combined_byte = bin(bytearray(combined_byte))
+        for i, bit in enumerate(combined_byte):
+            if i == 2:
+                if bit == 1:
+                    print("Восходящая калиброка")
+                if bit == 0:
+                    print("Нисходящая калиброка")
+                else:
+                    print("Ошибка !")
+            if i == 8:
+                if bit == 1:
+                    print("На компараторе 1 достигнуло значение")
+                if bit == 0:
+                    print("На компараторе 1 недостигнуло значение")
+            if i == 9:
+                if bit == 1:
+                    print("На компараторе 2 достигнуло значение")
+                if bit == 0:
+                    print("На компараторе 2 недостигнуло значение")
+        # Переворачиваем байты для корректного отображения
+        reversed(code_dac_1)
+        reversed(code_dac_2)
+
+        # Функция преобразования кода в напряжение
+        voltage_1 = [0, 0]
+        voltage_2 = [0, 0]
+        # Принимаем пакет
+        volt_1 = bytearray(data)[34:36]
+        volt_2 = bytearray(data)[36:38]
+        # Формируем правильный массив байт
+        voltage_1[0] = int(volt_1[1])
+        voltage_1[1] = int(volt_1[0])
+        voltage_2[0] = int(volt_2[1])
+        voltage_2[1] = int(volt_2[0])
+
+        res_voltage_1 = convert_base(bytes(voltage_1).hex(), from_base=16, to_base=10)
+        voltage_dac_1 = int(res_voltage_1)
+        res_voltage_2 = convert_base(bytes(voltage_2).hex(), from_base=16, to_base=10)
+        voltage_dac_2 = int(res_voltage_2)
+
+        return [code_dac_1, code_dac_2, voltage_dac_1, voltage_dac_2]
 
 
 #eth = Ethernet('192.168.0.1', 1233)

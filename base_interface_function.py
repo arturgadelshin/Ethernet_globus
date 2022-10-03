@@ -81,7 +81,7 @@ def replace_ip(s):
 """
 
 
-def request_data(add_bit):
+def data_request(add_bit):
     code_command = [4]
     reserved = [0]
 

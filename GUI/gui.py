@@ -65,11 +65,30 @@ class MDIWindow(QMainWindow): # Использовать для основног
         self.menu_1 = self.menuBar().addMenu("&Меню")
         self.menu_1.addAction('&Проверка по ТУ', self.prov_tu)
         self.menu_1.addAction('&Калибровка', self.calibrate)
+        self.menu_1.addAction('&О программе', self.about)
         self.menu_1.addAction('&Выход', self.close)
         self.menu_2 = self.menuBar().addMenu("&Вид")
         self.menu_2.addAction('&Каскад', self.window_cascade)
         self.menu_2.addAction('&Плитка', self.window_tiled)
+
         #self.menu.triggered[QAction].connect(self.prov_tu())
+
+    def about(self):
+        msg_box = QMessageBox( 1,
+                              "О программе",
+                              "Программа изначально задумывалась для проверки и сдачи по ТУ - ЭМ1 6П675Н."
+                              " В программе заложена реализация поканальной и автоматической калибровки ЭМ1."
+                              " Планируется реализовать полностью автоматическую проверку и передать ЭМ1 в цех. \n"
+                              "\n"
+                              " Дата начала разработки: 01.07.22 \n"
+                              " Разработчик: Гадельшин А.Р.\n"
+                              " Сайт: https://www.arturgadelshin.ru\n"
+                              " GitHub: https://github.com/arturgadelshin\n"
+                              " Телефон: 24-21 \n",
+                              buttons=QtWidgets.QMessageBox.Ok,
+                              parent=None
+                              )
+        msg_box.exec_()
 
     def window_cascade(self):
         self.mdi.cascadeSubWindows()
@@ -86,17 +105,11 @@ class MDIWindow(QMainWindow): # Использовать для основног
 
     def calibrate(self):
         sub = QMdiSubWindow()
+        sub.resize(600,300)
+        #sub.minimumSize(600,300)
         sub.setWidget(CalibrateWindow(self.mdi))
         self.mdi.addSubWindow(sub)
         sub.show()
-
-        # MDIWindow().sub_1.setVisible(True)
-        # QWidget.activateWindow(CalibrateWindow)
-        # sub_1 = QMdiSubWindow()
-        # sub_1.setWidget(CalibrateWindow(self.mdi))
-        # self.mdi.addSubWindow(sub_1)
-        # # sub_1.show()
-        # sub_1.show()
 
     def _createToolBar(self):
         tools = QToolBar()
@@ -341,8 +354,8 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
 
         sub = QMainWindow()
         sub.setCentralWidget(CalibrateWindow())
-        sub.addDockWidget()
-        sub.widge
+        #sub.addDockWidget()
+        #sub.widget
         sub.setFixedWidth(600)
         sub.setWidget(CalibrateWindow())
         #self.mdi.addSubWindow(sub)
@@ -354,7 +367,6 @@ class CalibrateWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QGridLayout()  # Создание сетки - Основная
-
         # Блок первый
         self.oneblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
 
@@ -382,18 +394,80 @@ class CalibrateWindow(QtWidgets.QWidget):
         self.oneblock.addWidget(self.vector_label, Qt.AlignJustify)
         self.oneblock.addWidget(self.vector_calibrate, Qt.AlignJustify)
         self.oneblock.addWidget(self.button_write_voltage, Qt.AlignJustify)
-
-        #self.button_OK.clicked.connect(self.on_connect)
+        self.button_write_voltage.clicked.connect(self.set_voltage)
 
         self.oneblock.addStretch(100)
-        self.layout.addLayout(self.oneblock, 0, 0, 0, 0)
+        self.layout.addLayout(self.oneblock, 0, 0, 1, 0)
 
+
+        # Блок второй
+
+        self.twoblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 2
+        self.dac_1_label = QtWidgets.QLabel('Значение кода ЦАП 1')
+        self.dac_1 = QtWidgets.QLineEdit()
+        self.dac_1.setFixedWidth(50)
+        self.dac_2_label = QtWidgets.QLabel('Значение кода ЦАП 2')
+        self.dac_2 = QtWidgets.QLineEdit()
+        self.dac_2.setFixedWidth(50)
+        self.dac_1.setText('None')
+        self.dac_2.setText('None')
+        self.dac_1.setReadOnly(True)
+        self.dac_2.setReadOnly(True)
+
+        # Фомирование второго блока интерфейса
+
+        self.twoblock.addWidget(self.dac_1_label, Qt.AlignLeft)
+        self.twoblock.addWidget(self.dac_1, Qt.AlignLeft)
+        self.twoblock.addWidget(self.dac_2_label, Qt.AlignLeft)
+        self.twoblock.addWidget(self.dac_2, Qt.AlignLeft)
+        self.layout.addLayout(self.twoblock, 1, 0, 1, 0)
+
+        # Блок третий
+
+        self.treeblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 2
+        self.voltage_1_label = QtWidgets.QLabel('Значение напряжения ЦАП 1')
+        self.voltage_1 = QtWidgets.QLineEdit()
+        self.voltage_1.setFixedWidth(50)
+        self.voltage_2_label = QtWidgets.QLabel('Значение напряжения ЦАП 2')
+        self.voltage_2 = QtWidgets.QLineEdit()
+        self.voltage_2.setFixedWidth(50)
+        self.voltage_1.setText('None')
+        self.voltage_2.setText('None')
+        self.voltage_1.setReadOnly(True)
+        self.voltage_2.setReadOnly(True)
+
+        # Фомирование второго блока интерфейса
+
+        self.treeblock.addWidget(self.voltage_1_label, Qt.AlignLeft)
+        self.treeblock.addWidget(self.voltage_1, Qt.AlignLeft)
+        self.treeblock.addWidget(self.voltage_2_label, Qt.AlignLeft)
+        self.treeblock.addWidget(self.voltage_2, Qt.AlignLeft)
+        self.layout.addLayout(self.treeblock, 2, 0, 1, 0)
 
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
 
 
 
+    def set_voltage(self):
+        set_voltage = Calibrate()
+        step = self.step.text()
+        vector = self.vector_calibrate.text()
+        channel = self.nmb_channel.text()
+        if channel != '' and step !='':
+            data = set_voltage.write_voltage_for_calibrate(step, vector, channel)
+            self.dac_1.setText(hex(data[0]))
+            self.dac_2.setText(hex(data[1]))
+            self.voltage_1.setText(data[2])
+            self.voltage_2.setText(data[3])
+        else:
+            msg_box = QMessageBox(QtWidgets.QMessageBox.Warning,
+                                  "Внимание!",
+                                  "Пожалуйста заполните поля 'Номера канала' и 'Шаг'",
+                                  buttons=QtWidgets.QMessageBox.Close,
+                                  parent=None
+                                  )
+            msg_box.exec_()
 
 
 
