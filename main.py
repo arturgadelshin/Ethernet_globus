@@ -1,7 +1,7 @@
-from GUI.gui import *
+from GUI.calibrate import *
 import sys  # sys нужен для передачи argv в QApplication
 from PyQt5 import QtWidgets
-
+from GUI.mdi_window import *
 global win
 
 

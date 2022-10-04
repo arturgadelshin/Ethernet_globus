@@ -3,7 +3,7 @@ from logging import *
 from globus_ethernet import *
 from parsing_ethernet import *
 import time
-from GUI.gui import *
+from GUI.calibrate import *
 
 
 
@@ -106,7 +106,7 @@ class Calibrate:
             21: [1],
         }
         must_be = 5
-        for i, byte in enumerate(data):
+        for i, byte in enumerate(data[1]):
             if byte == must_be_bytes[i]:
                 try:
                     must_be -= 1
@@ -128,7 +128,7 @@ class Calibrate:
             21: [1],
         }
         must_be = 5
-        for i, byte in enumerate(data):
+        for i, byte in enumerate(data[1]):
             if byte == must_be_bytes[i]:
                 try:
                     must_be -= 1
