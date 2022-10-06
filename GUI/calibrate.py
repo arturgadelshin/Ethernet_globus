@@ -2,6 +2,7 @@ from PyQt5.Qt import *
 from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
 from GUI.central_window import *
+from com_voltage_regulator import *
 
 
 class CalibrateWindow(QtWidgets.QWidget):
@@ -132,7 +133,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.twoblock.addWidget(self.button_run_automatic_calibrate, Qt.AlignCenter)
         self.button_run_automatic_calibrate.clicked.connect(self.run_automatic_calibrate)
 
-
         #self.twoblock.addStretch(100)
         self.layout.addLayout(self.twoblock, 1, 0)
 
@@ -150,6 +150,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.layout.addLayout(self.threeblock, 2, 0)
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
+
 
     def channels_group(self):
         groupBox = QGroupBox("Задайте уровни калибровки от наименьшего к наибольшему")
@@ -231,8 +232,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.layout_2.addLayout(vbox_7, 0, 6)
         self.layout_2.addLayout(vbox_8, 0, 7)
         groupBox.setLayout(self.layout_2)
-        #groupBox.setLayout(hbox_2)
-        #groupBox.setLayout(vbox_3)
+
         return groupBox
 
     def step_group(self):
@@ -248,25 +248,25 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         groupBox.setLayout(vbox_1)
         return groupBox
 
-    def set_voltage(self):
-        set_voltage = Calibrate()
-        step = self.step.text()
-        vector = self.vector_calibrate.text()
-        channel = self.nmb_channel.text()
-        if channel != '' and step != '':
-            data = set_voltage.write_voltage_for_calibrate(step, vector, channel)
-            self.dac_1.setText(hex(data[0]))
-            self.dac_2.setText(hex(data[1]))
-            self.voltage_1.setText(data[2])
-            self.voltage_2.setText(data[3])
-        else:
-            msg_box = QMessageBox(QtWidgets.QMessageBox.Warning,
-                                  "Внимание!",
-                                  "Пожалуйста заполните поля 'Номера канала' и 'Шаг'",
-                                  buttons=QtWidgets.QMessageBox.Close,
-                                  parent=None
-                                  )
-            msg_box.exec_()
+    # def set_voltage(self):
+    #     set_voltage = Calibrate()
+    #     step = self.step.text()
+    #     vector = self.vector_calibrate.text()
+    #     channel = self.nmb_channel.text()
+    #     if channel != '' and step != '':
+    #         data = set_voltage.write_voltage_for_calibrate(step, vector, channel)
+    #         self.dac_1.setText(hex(data[0]))
+    #         self.dac_2.setText(hex(data[1]))
+    #         self.voltage_1.setText(data[2])
+    #         self.voltage_2.setText(data[3])
+    #     else:
+    #         msg_box = QMessageBox(QtWidgets.QMessageBox.Warning,
+    #                               "Внимание!",
+    #                               "Пожалуйста заполните поля 'Номера канала' и 'Шаг'",
+    #                               buttons=QtWidgets.QMessageBox.Close,
+    #                               parent=None
+    #                               )
+    #         msg_box.exec_()
 
 
     def run_automatic_calibrate(self):
@@ -290,34 +290,98 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
                                   parent=None
                                   )
             msg_box.exec_()
+        # Задание COM порта
+        com_port = SetVoltageRegulatorWindow(self)
+        com_port.setWindowTitle('COM')
+        com_port.exec_()
+
         count_voltage_step = 8 # так как 8 уровней напряжения
         count_channel_calibrate = 32*count_voltage_step
         #self.table.setRowCount(count_channel_calibrate)
+
+        voltage_regutalor = VoltageRegulator()
+        voltage_regutalor.set_port()
+
         for voltage in voltages:
             if voltage != '' and step != '':
                 for channel in range(0, 32):
-                    # Здесь сделать фукнцию, которая будет управлять входным напряжением
-
+                    voltage_regutalor.set_voltage(int(voltage)) # управлять входным напряжением
+                    # ЗДЕСЬ НАВЕРНОЕ ПРИДЕТСЯ СДЕЛАТЬ ЗАДЕРЖКУ на время нарастия напряжения на выходе регулятора
                     # В data_up и data_down будут содержаться результаты измерений
                     vector = 1
-                    data_up = set_voltage.write_voltage_for_calibrate(step, vector, channel)
+                    data_up = set_voltage.write_voltage_for_calibrate(step, vector, channel+1)
                     # ЗДЕСЬ НАВЕРНОЕ ПРИДЕТСЯ СДЕЛАТЬ ЗАДЕРЖКУ
 
-                    self.table.setItem(0, 0, QTableWidgetItem(str(channel)))
-                    self.table.setItem(0, 1, QTableWidgetItem(str(voltage)))
-                    self.table.setItem(0, 2, QTableWidgetItem(str(vector)))
-                    self.table.setItem(0, 3, QTableWidgetItem(str(data_up[0])))
-                    self.table.setItem(0, 4, QTableWidgetItem(str(data_up[1])))
+                    self.table.setItem(channel, 0, QTableWidgetItem(str(channel)))
+                    self.table.setItem(channel, 1, QTableWidgetItem(str(voltage)))
+                    self.table.setItem(channel, 2, QTableWidgetItem(str(vector)))
+                    self.table.setItem(channel, 3, QTableWidgetItem(str(data_up[0])))
+                    self.table.setItem(channel, 4, QTableWidgetItem(str(data_up[1])))
                     average_code = (data_up[0]+data_up[1])/2
-                    self.table.setItem(0, 5, QTableWidgetItem(str(average_code)))
+                    self.table.setItem(channel, 5, QTableWidgetItem(str(average_code)))
                     k_calibrate = 0
-                    self.table.setItem(0, 6, QTableWidgetItem(str(k_calibrate)))
+                    self.table.setItem(channel, 6, QTableWidgetItem(str(k_calibrate)))
 
-
-                    print(data_up)
                     vector = 0
-                    data_down = set_voltage.write_voltage_for_calibrate(step, vector, channel)
+                    data_down = set_voltage.write_voltage_for_calibrate(step, vector, channel+1)
                     # ЗДЕСЬ НАВЕРНОЕ ПРИДЕТСЯ СДЕЛАТЬ ЗАДЕРЖКУ
-                    print(data_down)
+
+                    self.table.setItem(channel+1, 0, QTableWidgetItem(str(channel)))
+                    self.table.setItem(channel+1, 1, QTableWidgetItem(str(voltage)))
+                    self.table.setItem(channel+1, 2, QTableWidgetItem(str(vector)))
+                    self.table.setItem(channel+1, 3, QTableWidgetItem(str(data_up[0])))
+                    self.table.setItem(channel+1, 4, QTableWidgetItem(str(data_up[1])))
+                    average_code = (data_up[0]+data_up[1])/2
+                    self.table.setItem(channel+1, 5, QTableWidgetItem(str(average_code)))
+                    k_calibrate = 0
+                    self.table.setItem(channel+1, 6, QTableWidgetItem(str(k_calibrate)))
+
+
+class SetVoltageRegulatorWindow(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        #self.resize(300, 300)
+
+        self.layout = QGridLayout()  # Создание сетки - Основная
+        # Блок первый
+        self.oneblock = QtWidgets.QVBoxLayout()  # Создаем вертикальный контейнер 1
+        self.combo_box_1 = QComboBox()
+        self.combo_box_1.setToolTip('Задается адрес регулятора на порте')
+        self.combo_box_1.setToolTipDuration(3000)
+        self.combo_box_1.setFont(QtGui.QFont("Times", 10))
+        self.combo_box_2 = QComboBox()
+        self.combo_box_2.setToolTip('Задается скорость регулятора на порте')
+        self.combo_box_2.setToolTipDuration(3000)
+        self.combo_box_2.setFont(QtGui.QFont("Times", 10))
+        for port in serial_ports():
+            self.combo_box_1.addItem(port)
+            self.combo_box_1.setInsertPolicy(0)
+        self.speeds = VoltageRegulator().speeds
+        for speed in self.speeds:
+            self.combo_box_2.addItem(speed)
+            self.combo_box_2.setCurrentText('9600')
+            self.combo_box_2.setInsertPolicy(0)
+
+        self.button_write_settings = QtWidgets.QPushButton("Установить настройки")
+        self.button_write_settings.setFont(QtGui.QFont("Times", 10))
+        self.button_write_settings.setFixedWidth(150)
+        # Формирование интерфейса второго блока
+        self.oneblock.addWidget(self.combo_box_1, Qt.AlignCenter)
+        self.oneblock.addWidget(self.combo_box_2, Qt.AlignCenter)
+        self.oneblock.addWidget(self.button_write_settings, Qt.AlignCenter)
+        self.button_write_settings.clicked.connect(self.set_com_port)
+        self.layout.addLayout(self.oneblock, 1, 0)
+
+        self.setLayout(self.layout)
+
+    def set_com_port(self):
+        port = self.combo_box_1.currentText()
+        speed = self.combo_box_2.currentText()
+        VoltageRegulator.port = port
+        VoltageRegulator.speed = speed
+        self.close()
+
+       # self.button_write_settings.clicked.connect(self.de)
+
 
 

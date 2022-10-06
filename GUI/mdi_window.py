@@ -1,4 +1,7 @@
+from PyQt5.QtWidgets import QMessageBox
+
 from GUI.calibrate import *
+from GUI.central_window import *
 
 
 class MDIWindow(QMainWindow): # Использовать для основного окна
@@ -16,7 +19,6 @@ class MDIWindow(QMainWindow): # Использовать для основног
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
 
-
     def createMenu(self):
         self.menu_1 = self.menuBar().addMenu("&Меню")
         self.menu_1.addAction('&Проверка по ТУ', self.prov_tu)
@@ -27,8 +29,6 @@ class MDIWindow(QMainWindow): # Использовать для основног
         self.menu_2 = self.menuBar().addMenu("&Вид")
         self.menu_2.addAction('&Каскад', self.window_cascade)
         self.menu_2.addAction('&Плитка', self.window_tiled)
-
-        #self.menu.triggered[QAction].connect(self.prov_tu())
 
     def about(self):
         msg_box = QMessageBox( 1,
@@ -89,3 +89,11 @@ class MDIWindow(QMainWindow): # Использовать для основног
         print('ggg')
         #self.status.clearMessage()
         #self._createStatusBar.clearMessage()
+
+    def set_voltage_regulator(self):
+        sub = QMdiSubWindow()
+        sub.setMinimumSize(200, 200)
+        sub.setWindowTitle('COM порт')
+        sub.setWidget(SetVoltageRegulatorWindow(self.mdi))
+        self.mdi.addSubWindow(sub)
+        sub.show()
