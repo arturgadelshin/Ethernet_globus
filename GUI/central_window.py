@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QGridLayout
 from GUI.calibrate import *
 from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
+from globus_ethernet import *
 
 
 class StageThread(QtCore.QThread):
@@ -281,3 +282,10 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         #self.mdi.addSubWindow(sub)
         sub.show()
         #CalibrateWindow()
+
+
+class QHLine(QFrame):
+    def __init__(self):
+        super(QHLine, self).__init__()
+        self.setFrameShape(QFrame.HLine)
+        self.setFrameShadow(QFrame.Sunken)

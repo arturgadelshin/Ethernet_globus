@@ -96,7 +96,7 @@ class Calibrate:
         ...
 
     def write_voltage_for_calibrate(self, step, vector, channel):
-        write = calibrate(dec(step), dec(vector), dec(channel))  # code command 0x80
+        write = calibrate(step, vector, channel)  # code command 0x80
         data = Ethernet().swap(write)
         must_be_bytes = {
             2: [1],

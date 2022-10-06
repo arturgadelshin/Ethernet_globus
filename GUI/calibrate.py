@@ -3,6 +3,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
 from GUI.central_window import *
 from com_voltage_regulator import *
+from globus_ethernet import *
 
 
 class CalibrateWindow(QtWidgets.QWidget):
@@ -119,10 +120,45 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         #self.resize(600, 100)
 
         self.layout = QGridLayout()  # Создание сетки - Основная
+
+        # Блок нулевой
+        self.nullblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
+        self.addr_IP = QtWidgets.QLabel('IP адрес устройства')
+        self.addr_IP.setFont(QtGui.QFont("Times", 10))
+        self.addr_IP.setFixedWidth(150)
+        self.add_addr_IP = QtWidgets.QLineEdit()
+        self.add_addr_IP.setFixedWidth(115)
+        # self.add_addr_IP.setInputMask('DDD.999.999.999;#') # Убрать!
+        self.add_addr_IP.setText('192.168.0.1')
+        self.port_IP = QtWidgets.QLabel('Номер порта')
+        self.port_IP.setFont(QtGui.QFont("Times", 10))
+        self.port_IP.setFixedWidth(150)
+        # self.port_IP.setContentsMargins(10, 0, 0, 0)
+        self.add_port_IP = QtWidgets.QLineEdit()
+        #self.port_IP.setContentsMargins(20,0,0,0)
+        self.add_port_IP.setFixedWidth(50)
+        self.add_port_IP.setInputMask('DDDD')
+        self.add_port_IP.setText('1233')
+
+        # Формирование интерфейса нулевого блока
+        self.nullblock.addWidget(self.addr_IP, Qt.AlignJustify)
+        self.nullblock.addWidget(self.add_addr_IP, Qt.AlignJustify)
+        self.nullblock.addWidget(self.port_IP, Qt.AlignJustify)
+        self.nullblock.addWidget(self.add_port_IP, Qt.AlignJustify)
+        self.nullblock.addStretch(100)
+        self.layout.addLayout(self.nullblock, 0, 0)
+        self.layout.addWidget(QHLine(), 1, 0)  # ГОРИЗОНТАЛЬНЫЙ РАЗДЕЛИТЕЛЬ
+
         # Блок первый
-        self.layout.addWidget(self.channels_group(), 0, 0)
-        self.layout.addWidget(self.step_group(), 0, 1)
+        #self.layout.addWidget(self.nullblock,)
+        self.layout.addWidget(self.channels_group(), 2, 0)
+        self.layout.addWidget(self.step_group(), 2, 1)
         self.setWindowTitle('Автоматическая калибровка')
+
+
+
+
+
 
         # Блок второй
         self.twoblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
@@ -134,7 +170,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_run_automatic_calibrate.clicked.connect(self.run_automatic_calibrate)
 
         #self.twoblock.addStretch(100)
-        self.layout.addLayout(self.twoblock, 1, 0)
+        self.layout.addLayout(self.twoblock, 3, 0)
 
         # Третий блок с таблицей
 
@@ -147,7 +183,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
         #self.table.resizeColumnsToContents()
         self.threeblock.addWidget(self.table)
-        self.layout.addLayout(self.threeblock, 2, 0)
+        self.layout.addLayout(self.threeblock, 4, 0)
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
 
@@ -241,6 +277,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
         self.step_label = QtWidgets.QLabel('Шаг калибровки')
         self.step = QtWidgets.QLineEdit()
+        self.step.setText('1')
         #self.step.setFixedWidth(50)
         vbox_1 = QtWidgets.QVBoxLayout()
         vbox_1.addWidget(self.step_label)
@@ -271,7 +308,14 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
     def run_automatic_calibrate(self):
         set_voltage = Calibrate()
-        step = self.step.text()
+        addr_IP = self.add_addr_IP.text()  # Получить введенное значение в поле
+        port_IP = self.add_port_IP.text()  # Получить введенное значение в поле
+
+        # Установка addr и port
+        Ethernet.port = int(port_IP)
+        Ethernet.host = str(addr_IP)
+
+        step = int(self.step.text())
         volt_1 = self.voltage_1.text()
         volt_2 = self.voltage_2.text()
         volt_3 = self.voltage_3.text()
@@ -381,7 +425,6 @@ class SetVoltageRegulatorWindow(QtWidgets.QDialog):
         VoltageRegulator.speed = speed
         self.close()
 
-       # self.button_write_settings.clicked.connect(self.de)
 
 
 
