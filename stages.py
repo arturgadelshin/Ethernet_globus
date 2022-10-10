@@ -100,18 +100,18 @@ class Calibrate:
         data = Ethernet().swap(write)
         must_be_bytes = {
             2: [1],
-            12: [10],  # 0x0A
-            14: [10],  # 0x0A
+            12: [10],   # 0x0A
+            14: [10],   # 0x0A
             20: [128],  # 0x80
             21: [1],
         }
         must_be = 5
         for i, byte in enumerate(data[1]):
-            if byte == must_be_bytes[i]:
-                try:
+            try:
+                if byte == must_be_bytes[i]:
                     must_be -= 1
-                except KeyError:
-                    continue
+            except KeyError:
+                continue
         if must_be == 0:
             print(f"Команда {bytes(must_be_bytes[20])} выполнена")
         else:

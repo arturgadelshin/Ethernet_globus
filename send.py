@@ -5,44 +5,15 @@ import re
 from base_interface_function import reset_em
 
 
-# class Counter:
-#     def __iter__(self):
-#         self.i = 0
-#         return self
-#
-#     def __next__(self):
-#         if self.i <= 65534:
-#             # x = self.a
-#             self.i += 1
-#             uid = struct.pack("<H", self.i)
-#             return uid
-#
-#         else:
-#             self.i = 0
-#
-#
-# myclass = Counter()
-# uid = iter(myclass)
-
-#for x in uid:
-   # if x == None:
-   #     continue
-   # print(x)
-
-
-# Узнать как вычислять указатель на следующую команду
-# Используется для вычисления указателя на следующую
-# команду в UDP-пакете
-
 
 def len_command(msg):
     len_command = [0, 0]
     len_c = int(len(msg) + 2)
     a = struct.pack('>h', len_c)
     size_d = bytearray(a)
-    len_command[0] = int(size_d[1])
-    len_command[1] = int(size_d[0])
-    return len_command
+    len_command[0] = size_d[1]
+    len_command[1] = size_d[0]
+    return bytes(len_command)
 
 
 
@@ -103,4 +74,5 @@ class AddData:
 
     def __init__(self):
         pass
-
+#01 00 08 00 50 00 01 01 01 00
+#print(len_command(b'\x50\x00\x01\x01\x01\x00'))

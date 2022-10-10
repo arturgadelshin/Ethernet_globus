@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QGridLayout
 
 from GUI.calibrate import *
+from GUI.central_window import *
 from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
 from globus_ethernet import *
@@ -271,9 +272,9 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
             self.header_stage.appendRow(i)  # Вывод строк для дерева списка
 
     def calibrate(self):
-        #sub = QMdiSubWindow()
+        sub = QMdiSubWindow()
 
-        sub = QMainWindow()
+        #sub = QMainWindow()
         sub.setCentralWidget(CalibrateWindow())
         #sub.addDockWidget()
         #sub.widget

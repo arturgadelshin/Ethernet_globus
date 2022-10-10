@@ -14,15 +14,14 @@ from parsing_ethernet import convert_base
 
 
 def reset_em(add_bit):
-    code_command = [1]
-    reserved = [0]
+    code_command = [0x01]
+    reserved = [0x00]
     if add_bit == 1:
-        add_byte = [1]
+        add_byte = [0x01]
     else:
-        add_byte = [0]
+        add_byte = [0x00]
     msg = (code_command + reserved + add_byte)
-    return msg
-
+    return bytes(msg)
 
 """
 Команда «Исходное» (0х01 ).
@@ -35,14 +34,14 @@ def reset_em(add_bit):
 
 
 def read_testinfo_and_rgsmk(add_bit):
-    code_command = [2]
-    reserved = [0]
+    code_command = [0x02]
+    reserved = [0x00]
     if add_bit == 1:  # Сбросить регистр после ответа
-        add_byte = [1]
+        add_byte = [0x01]
     else:
-        add_byte = [0]  # Не изменять значение регистра
+        add_byte = [0x00]  # Не изменять значение регистра
     msg = (code_command + reserved + add_byte)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -60,8 +59,8 @@ def read_testinfo_and_rgsmk(add_bit):
 
 
 def replace_ip(s):
-    code_command = [3]
-    reserved = [0]
+    code_command = [0x03]
+    reserved = [0x00]
     # Длина адреса 4 байта
     addr_IP = s.split('.')
     data = []
@@ -70,8 +69,7 @@ def replace_ip(s):
         data.append(int(i))
 
     msg = (code_command + reserved + data)
-    return msg
-
+    return bytes(msg)
 
 """
 Команда предназначена для смены IP адреса модуля по интерфейсу Ethernet.
@@ -82,15 +80,14 @@ def replace_ip(s):
 
 
 def data_request(add_bit):
-    code_command = [4]
-    reserved = [0]
-
+    code_command = [0x04]
+    reserved = [0x00]
     if add_bit == 1:  # Вернуть самые свежие данные без удаления из буфера
-        add_byte = [1]
+        add_byte = [0x01]
     else:
-        add_byte = [0]  # Вернуть самые ранние данные с удалением их из буфера
+        add_byte = [0x00]  # Вернуть самые ранние данные с удалением их из буфера
     msg = code_command + reserved + add_byte
-    return msg
+    return bytes(msg)
 
 
 """
@@ -107,8 +104,8 @@ def data_request(add_bit):
 
 
 def read_data_any_addr(addr_read_data, size_data):
-    code_command = [5]
-    reserved = [0]
+    code_command = [0x05]
+    reserved = [0x00]
     # Адрес считывания данных (4байта)
     # Максимальный размер запрашиваемых данных в байтах (2 байта)
     size = []
@@ -124,7 +121,7 @@ def read_data_any_addr(addr_read_data, size_data):
         size.append((int(i)))
     # msg = bytes(code_command + reserved + data + size)
     msg = (code_command + reserved + data + size)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -139,8 +136,8 @@ def read_data_any_addr(addr_read_data, size_data):
 
 
 def write_data_any_addr(addr_write_data, len_data, write_data):
-    code_command = [6]
-    reserved = [0]
+    code_command = [0x06]
+    reserved = [0x00]
     addr = []
     len_ = []
     data = []
@@ -156,7 +153,7 @@ def write_data_any_addr(addr_write_data, len_data, write_data):
         data.append(int(i, 16))
 
     msg = (code_command + reserved + addr + len_ + data)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -173,8 +170,8 @@ def write_data_any_addr(addr_write_data, len_data, write_data):
 
 
 def write_32_bit_mask(addr_write_data, mask, write_data):
-    code_command = [7]
-    reserved = [0]
+    code_command = [0x07]
+    reserved = [0x00]
     addr = []
     mask_ = []
     data = []
@@ -191,7 +188,7 @@ def write_32_bit_mask(addr_write_data, mask, write_data):
         data.append(int(i, 16))
 
     msg = (code_command + reserved + addr + mask_ + data)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -213,12 +210,11 @@ def write_32_bit_mask(addr_write_data, mask, write_data):
 8…11	    Данные	    Записываемые данные, 4 байта
 """
 
-
 def stop():
-    code_command = [8]
-    reserved = [0]
+    code_command = [0x08]
+    reserved = [0x00]
     msg = (code_command + reserved)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -226,10 +222,9 @@ def stop():
 Команда передаётся без дополнительных данных.
 """
 
-
 def reset_reg_state(mask):
-    code_command = [9]
-    reserved = [0]
+    code_command = [0x09]
+    reserved = [0x00]
     mask_ = []
 
     mask_d = re.findall(r'\w\w', mask)
@@ -237,8 +232,7 @@ def reset_reg_state(mask):
         mask_.append(int(i, 16))
 
     msg = (code_command + reserved + mask_)
-    return msg
-
+    return bytes(msg)
 
 """
 Команда предназначена для сброса бит регистра состояния.
@@ -248,13 +242,11 @@ def reset_reg_state(mask):
 регистром состояния.
 """
 
-
 def program_start():
-    code_command = [10]
-    reserved = [0]
+    code_command = [0x10]
+    reserved = [0x00]
     msg = (code_command + reserved)
-    return msg
-
+    return bytes(msg)
 
 """
 Команда предназначена для программного запуска ЭМ, 
@@ -267,8 +259,8 @@ def program_start():
 
 
 def setting_em(mask, write_data):
-    code_command = [11]
-    reserved = [0]
+    code_command = [0x11]
+    reserved = [0x00]
     mask_ = []
     data = []
 
@@ -281,7 +273,7 @@ def setting_em(mask, write_data):
         data.append(int(i, 16))
 
     msg = (code_command + reserved + mask_ + data)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -316,8 +308,8 @@ def setting_em(mask, write_data):
 
 
 def smk(write_data):
-    code_command = [12]
-    reserved = [0]
+    code_command = [0x12]
+    reserved = [0x00]
     data = []
 
     data_d = re.findall(r'\w\w', write_data)
@@ -326,7 +318,7 @@ def smk(write_data):
         data.append(int(i, 16))
 
     msg = (code_command + reserved + data)
-    return msg
+    return bytes(msg)
 
 
 """
@@ -351,8 +343,8 @@ def smk(write_data):
 
 
 def calibrate(step, vector, channel):
-    code_command = [80]
-    reserved = [0]
+    code_command = [0x80]
+    reserved = [0x00]
     data = [step, vector]
 
     if channel < 255:
@@ -363,7 +355,8 @@ def calibrate(step, vector, channel):
         data.append(rez[1])
         data.append(rez[0])
     msg = (code_command + reserved + data)
-    return msg
+    return bytes(msg)
+
 
 # print(replace_ip('192.168.0.2'))
 # print(read_data_any_addr("FC7F0020", "0400"))

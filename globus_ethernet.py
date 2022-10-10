@@ -47,17 +47,18 @@ class Ethernet:
     def swap(self, command):
         em = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,)  # Установка типа сети UPD
         em.connect((self.host, self.port))
-        # socket.setdefaulttimeout(30) # Настройка таймаута
+        #socket.setdefaulttimeout(5) # Настройка таймаута
         uid = next(self.uid_2_byte)
         len_com = len_command(command)
         com = command
-        list_uid = [uid[0], uid[1]]
+        list_uid = bytes([(uid[0]), uid[1]])
         write = list_uid+len_com+com
-        print('*'*57)
-        em.sendall(bytes(write))
+        #print('*'*57)
+        em.sendall(write)
         time.sleep(0.1)
         #data = self.client.recvfrom(1024,2) # Волшебная строчка!
         read = em.recvfrom(1024)
+        # Попробовать функцию recv
         em.close()
         return [write, read[0]]
 
@@ -65,14 +66,15 @@ class Ethernet:
     def delay_swap(self, command):
         em = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,)  # Установка типа сети UPD
         em.connect((self.host, self.port))
+        time.sleep(0.5)
         # socket.setdefaulttimeout(30) # Настройка таймаута
         uid = next(self.uid_2_byte)
         len_com = len_command(command)
         com = command
-        list_uid = [uid[0], uid[1]]
+        list_uid = bytes([(uid[0]), uid[1]])
         write = list_uid+len_com+com
-        print('*'*57)
-        em.sendall(bytes(write))
+        #print('*'*57)
+        em.sendall(write)
         time.sleep(3)
         #data = self.client.recvfrom(1024,2) # Волшебная строчка!
         read = em.recvfrom(1024)
