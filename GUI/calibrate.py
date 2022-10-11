@@ -29,7 +29,6 @@ class CalibrateThread(QtCore.QThread):
             if voltage != '' and step != '':
                 for channel in range(0, 32):
                     voltage_regutalor.set_voltage(int(voltage))  # управлять входным напряжением
-                    # ЗДЕСЬ НАВЕРНОЕ ПРИДЕТСЯ СДЕЛАТЬ ЗАДЕРЖКУ на время нарастия напряжения на выходе регулятора
                     # В data_up и data_down будут содержаться результаты измерений
                     vector = 1
                     data = set_voltage.write_voltage_for_calibrate(step, vector, channel + 1)
@@ -250,7 +249,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         #groupBox.resize(600,100)
         self.voltage_1_label = QtWidgets.QLabel('1 уровень,(В)')
         self.voltage_1 = QtWidgets.QLineEdit()
-        self.voltage_1.setText('2')
+        self.voltage_1.setText('3')
         #self.voltage_1.setFixedWidth(30)
 
         self.voltage_2_label = QtWidgets.QLabel('2 уровень,(В)')
@@ -261,32 +260,32 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.voltage_3_label = QtWidgets.QLabel('3 уровень,(В)')
         self.voltage_3 = QtWidgets.QLineEdit()
         #self.voltage_3.setFixedWidth(30)
-        self.voltage_3.setText('10')
+        self.voltage_3.setText('9')
 
         self.voltage_4_label = QtWidgets.QLabel('4 уровень,(В)')
         self.voltage_4 = QtWidgets.QLineEdit()
         #self.voltage_4.setFixedWidth(30)
-        self.voltage_4.setText('14')
+        self.voltage_4.setText('12')
 
         self.voltage_5_label = QtWidgets.QLabel('5 уровень,(В)')
         self.voltage_5 = QtWidgets.QLineEdit()
         #self.voltage_5.setFixedWidth(30)
-        self.voltage_5.setText('18')
+        self.voltage_5.setText('16')
 
         self.voltage_6_label = QtWidgets.QLabel('6 уровень,(В)')
         self.voltage_6 = QtWidgets.QLineEdit()
         #self.voltage_6.setFixedWidth(30)
-        self.voltage_6.setText('22')
+        self.voltage_6.setText('20')
 
         self.voltage_7_label = QtWidgets.QLabel('7 уровень,(В)')
         self.voltage_7 = QtWidgets.QLineEdit()
         #self.voltage_7.setFixedWidth(30)
-        self.voltage_7.setText('24')
+        self.voltage_7.setText('23')
 
         self.voltage_8_label = QtWidgets.QLabel('8 уровень,(В)')
         self.voltage_8 = QtWidgets.QLineEdit()
         #self.voltage_8.setFixedWidth(30)
-        self.voltage_8.setText('30')
+        self.voltage_8.setText('26')
 
         vbox_1 = QtWidgets.QVBoxLayout()
         vbox_2 = QtWidgets.QVBoxLayout()

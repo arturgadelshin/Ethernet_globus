@@ -45,4 +45,7 @@ class VoltageRegulator:
 
     def set_voltage(self, voltage):
         self.port.write(bytes(str(voltage), 'utf-8'))
+        time.sleep(1.0)
+        self.port.write(bytes(str(voltage), 'utf-8'))
+        time.sleep(1.0)  # Необходимая задержка на время установления напряжения на выходе регулятора
 
