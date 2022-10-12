@@ -1,15 +1,18 @@
+import time
+
 from PyQt5.Qt import *
 from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
 from GUI.central_window import *
 from com_voltage_regulator import *
 from globus_ethernet import *
+from GwINSTEK import *
 
 
 class CalibrateThread(QtCore.QThread):
     thread_signal = QtCore.pyqtSignal(int)
     thread_data = QtCore.pyqtSignal(list, int, int, str)
-
+    count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
     def __init__(self, parent=None):
         QtCore.QThread.__init__(self, parent)
 
@@ -17,27 +20,28 @@ class CalibrateThread(QtCore.QThread):
         set_voltage = Calibrate()
         voltages = CalibrateAutomaticWindow.voltages
         step = CalibrateAutomaticWindow.step
-        # Отсюда переносить в поток?
-        count_voltage_step = 8  # так как 8 уровней напряжения
-        count_channel_calibrate = 32 * count_voltage_step
+
+        count_channel_calibrate = 32 * self.count_voltage_step
         # self.table.setRowCount(count_channel_calibrate)
 
-        voltage_regutalor = VoltageRegulator()
-        voltage_regutalor.set_port()
+        voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
+        voltage_regutalor.set_port()            # Задать порт
+        voltage_regutalor.power_em()            # Подать питание
 
         for voltage in voltages:
+            voltage_regutalor.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
             if voltage != '' and step != '':
                 for channel in range(0, 32):
-                    voltage_regutalor.set_voltage(int(voltage))  # управлять входным напряжением
+                    #voltage_regutalor.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
+                    #time.sleep(0.05)
                     # В data_up и data_down будут содержаться результаты измерений
                     vector = 1
-                    data = set_voltage.write_voltage_for_calibrate(step, vector, channel + 1)
-                    self.thread_data.emit(data, channel, vector, voltage)
+                    data = set_voltage.write_voltage_for_calibrate(step, vector, (channel + 1))
+                    self.thread_data.emit(data, channel*2, vector, voltage)
 
                     vector = 0
-                    data = set_voltage.write_voltage_for_calibrate(step, vector, channel + 1)
-                    self.thread_data.emit(data, channel, vector, voltage)
-
+                    data = set_voltage.write_voltage_for_calibrate(step, vector, (channel+1))
+                    self.thread_data.emit(data, (channel*2)+1, vector, voltage)
                     self.thread_signal.emit(channel)  # Для прогрессбара
 
 
@@ -156,7 +160,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         #self.resize(600, 100)
-
+        self.counter = 0
         self.layout = QGridLayout()  # Создание сетки - Основная
 
         # Блок нулевой
@@ -167,7 +171,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.add_addr_IP = QtWidgets.QLineEdit()
         self.add_addr_IP.setFixedWidth(115)
         # self.add_addr_IP.setInputMask('DDD.999.999.999;#') # Убрать!
-        self.add_addr_IP.setText('192.168.0.1')
+        self.add_addr_IP.setText('192.168.1.0')
         self.port_IP = QtWidgets.QLabel('Номер порта')
         self.port_IP.setFont(QtGui.QFont("Times", 10))
         self.port_IP.setFixedWidth(150)
@@ -194,10 +198,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.setWindowTitle('Автоматическая калибровка')
 
 
-
-
-
-
         # Блок второй
         self.twoblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
         self.button_OK = QtWidgets.QPushButton("Настройка COM-порта")
@@ -217,14 +217,15 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         #self.twoblock.addStretch(100)
         self.layout.addLayout(self.twoblock, 3, 0)
 
-        # Третий блок с таблицей
 
+
+        # Третий блок с таблицей
         self.threeblock = QtWidgets.QHBoxLayout()
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table = QTableWidget(1100, 8)
+        #self.table.setColumnCount(7)
 
         # Set the table headers
-        self.table.setHorizontalHeaderLabels(["Channel", "Voltage", "Vector", "Code_1", "Code_2", "Avg_Code", "K_calibrate",])
+        self.table.setHorizontalHeaderLabels(["N", "Channel", "Voltage", "Vector", "Code_1", "Code_2", "Avg_Code", "K_calibrate",])
 
         #self.table.resizeColumnsToContents()
         self.threeblock.addWidget(self.table)
@@ -237,11 +238,11 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.automatic_calibrate_thread.finished.connect(self.on_finished)
         self.automatic_calibrate_thread.thread_signal.connect(self.on_change, QtCore.Qt.QueuedConnection)
         self.automatic_calibrate_thread.thread_data.connect(self.table_update, QtCore.Qt.QueuedConnection)
+
         # sub.setWidget(self.setLayout(self.layout))
 
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
-
 
     def channels_group(self):
         groupBox = QGroupBox("Задайте уровни калибровки от наименьшего к наибольшему")
@@ -360,7 +361,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     #                               )
     #         msg_box.exec_()
 
-
     def run_automatic_calibrate(self):
         #set_voltage = Calibrate()
         addr_IP = self.add_addr_IP.text()  # Получить введенное значение в поле
@@ -390,7 +390,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
                                   )
             msg_box.exec_()
         # Задание COM порта
-        com_port = SetVoltageRegulatorWindow(self)
+        com_port = GwINSTEKWindow(self)
         com_port.setWindowTitle('COM')
         com_port.exec_()
 
@@ -437,7 +437,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         #             k_calibrate = 0
         #             self.table.setItem(channel+1, 6, QTableWidgetItem(str(k_calibrate)))
 
-
     def on_started(self): # Запускается в начале потока
         pass
 
@@ -452,16 +451,183 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     def run_thread(self):
         self.automatic_calibrate_thread.start()  # Запускаем поток
 
-    def table_update(self, data, channel, vector, voltage):
-        self.table.setItem(channel, 0, QTableWidgetItem(str(channel)))
-        self.table.setItem(channel, 1, QTableWidgetItem(str(voltage)))
-        self.table.setItem(channel, 2, QTableWidgetItem(str(vector)))
-        self.table.setItem(channel, 3, QTableWidgetItem(str(data[0])))
-        self.table.setItem(channel, 4, QTableWidgetItem(str(data[1])))
-        average_code = (data[0] + data[1]) / 2
-        self.table.setItem(channel, 5, QTableWidgetItem(str(average_code)))
-        k_calibrate = 0
-        self.table.setItem(channel, 6, QTableWidgetItem(str(k_calibrate)))
+
+    def table_update(self, data, number, vector, voltage):
+        if number % 2 == 0:
+            self.channel = int((number/2)+1)
+            self.table.setItem((64*self.counter)+number, 0, QTableWidgetItem(str((64*self.counter)+number)))
+            self.table.setItem((64*self.counter)+number, 1, QTableWidgetItem(str(self.channel)))
+            self.table.setItem((64*self.counter)+number, 2, QTableWidgetItem(str(voltage)))
+            self.table.setItem((64*self.counter)+number, 3, QTableWidgetItem(str(vector)))
+            self.table.setItem((64*self.counter)+number, 4, QTableWidgetItem(str(data[0])))
+            self.table.setItem((64*self.counter)+number, 5, QTableWidgetItem(str(data[1])))
+            average_code = (int(data[2]) + int(data[3])) / 2
+            self.table.setItem((64*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
+            k_calibrate = 0
+            self.table.setItem((64*self.counter)+number, 7, QTableWidgetItem(str(k_calibrate)))
+        else:
+            self.table.setItem((64*self.counter)+number, 0, QTableWidgetItem(str((64*self.counter)+number)))
+            self.table.setItem((64*self.counter)+number, 1, QTableWidgetItem(str(self.channel)))
+            self.table.setItem((64*self.counter)+number, 2, QTableWidgetItem(str(voltage)))
+            self.table.setItem((64*self.counter)+number, 3, QTableWidgetItem(str(vector)))
+            self.table.setItem((64*self.counter)+number, 4, QTableWidgetItem(str(data[0])))
+            self.table.setItem((64*self.counter)+number, 5, QTableWidgetItem(str(data[1])))
+            average_code = (int(data[2]) + int(data[3])) / 2
+            self.table.setItem((64*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
+            k_calibrate = 0
+            self.table.setItem((64*self.counter)+number, 7, QTableWidgetItem(str(k_calibrate)))
+        if number == 63:
+            self.counter += 1
+
+        # if voltage == self.voltage_2.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number/2)+1)
+        #         self.table.setItem((64*1)+number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64*1)+number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64*1)+number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64*1)+number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64*1)+number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64*1)+number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64*1)+number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64*1)+number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64*1)+number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64*1)+number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64*1)+number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64*1)+number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64*1)+number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64*1)+number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64*1)+number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64*1)+number, 7, QTableWidgetItem(str(k_calibrate)))
+        #
+        # if voltage == self.voltage_3.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number / 2) + 1)
+        #         self.table.setItem((64 * 2) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 2) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 2) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 2) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 2) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 2) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 2) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 2) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64 * 2) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 2) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 2) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 2) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 2) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 2) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 2) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 2) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #
+        # if voltage == self.voltage_4.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number / 2) + 1)
+        #         self.table.setItem((64 * 3) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 3) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 3) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 3) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 3) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 3) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 3) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 3) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64 * 3) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 3) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 3) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 3) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 3) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 3) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 3) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 3) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #
+        # if voltage == self.voltage_5.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number / 2) + 1)
+        #         self.table.setItem((64 * 4) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 4) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 4) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 4) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 4) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 4) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 4) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 4) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64 * 4) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 4) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 4) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 4) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 4) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 4) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 4) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 4) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #
+        # if voltage == self.voltage_6.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number / 2) + 1)
+        #         self.table.setItem((64 * 5) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 5) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 5) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 5) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 5) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 5) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 5) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 5) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64 * 5) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 5) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 5) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 5) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 5) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 5) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 5) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 5) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #
+        # if voltage == self.voltage_7.text():
+        #     if number % 2 == 0:
+        #         self.channel = int((number / 2) + 1)
+        #         self.table.setItem((64 * 6) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 6) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 6) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 6) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 6) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 6) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 6) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 6) + number, 7, QTableWidgetItem(str(k_calibrate)))
+        #     else:
+        #         self.table.setItem((64 * 6) + number, 0, QTableWidgetItem(str(number)))
+        #         self.table.setItem((64 * 6) + number, 1, QTableWidgetItem(str(self.channel)))
+        #         self.table.setItem((64 * 6) + number, 2, QTableWidgetItem(str(voltage)))
+        #         self.table.setItem((64 * 6) + number, 3, QTableWidgetItem(str(vector)))
+        #         self.table.setItem((64 * 6) + number, 4, QTableWidgetItem(str(data[0])))
+        #         self.table.setItem((64 * 6) + number, 5, QTableWidgetItem(str(data[1])))
+        #         average_code = (int(data[2]) + int(data[3])) / 2
+        #         self.table.setItem((64 * 6) + number, 6, QTableWidgetItem(str(average_code)))
+        #         k_calibrate = 0
+        #         self.table.setItem((64 * 6) + number, 7, QTableWidgetItem(str(k_calibrate)))
 
 
 class SetVoltageRegulatorWindow(QtWidgets.QDialog):

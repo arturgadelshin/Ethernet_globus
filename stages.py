@@ -108,7 +108,7 @@ class Calibrate:
         must_be = 5
         for i, byte in enumerate(data[1]):
             try:
-                if byte == must_be_bytes[i]:
+                if [byte] == must_be_bytes[i]:
                     must_be -= 1
             except KeyError:
                 continue
@@ -129,47 +129,45 @@ class Calibrate:
         }
         must_be = 5
         for i, byte in enumerate(data[1]):
-            if byte == must_be_bytes[i]:
-                try:
+            try:
+                if [byte] == must_be_bytes[i]:
                     must_be -= 1
-                except KeyError:
-                    continue
+            except KeyError:
+                continue
         if must_be == 0:
             print(f"Команда {bytes(must_be_bytes[20])} выполнена")
         else:
             print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
 
-        frame = data[22:30]  # frame так сказал Юрий Иваныч Атаманчук
-        channel_read = data[30]
-        step_read = data[31]
-        combined_byte = data[32]
-        reserved = data[33]
-        code_dac_1 = data[34:36]
-        code_dac_2 = data[36:38]
+        frame = data[1][22:30]  # frame так сказал Юрий Иваныч Атаманчук
+        channel_read = data[1][30]
+        step_read = data[1][31]
+        combined_byte = data[1][32]
+        reserved = data[1][33]
+        code_dac_1 = data[1][34:36]
+        code_dac_2 = data[1][36:38]
         if step == step_read and channel == channel_read:
             print("Команда отработана верно")
         else:
             print("Команда отработана неверно")
 
         # возможно придется преобразовать принятый байт в bin()
-        combined_byte = bin(bytearray(combined_byte))
-        for i, bit in enumerate(combined_byte):
+        combined_byte = bin(combined_byte)
+        for i, byte in enumerate(combined_byte):
             if i == 2:
-                if bit == 1:
+                if int(combined_byte[i]) == 1:
                     print("Восходящая калиброка")
-                if bit == 0:
+                if int(combined_byte[i]) == 0:
                     print("Нисходящая калиброка")
-                else:
-                    print("Ошибка !")
             if i == 8:
-                if bit == 1:
+                if int(combined_byte[i]) == 1:
                     print("На компараторе 1 достигнуло значение")
-                if bit == 0:
+                if int(combined_byte[i]) == 0:
                     print("На компараторе 1 недостигнуло значение")
             if i == 9:
-                if bit == 1:
+                if int(combined_byte[i]) == 1:
                     print("На компараторе 2 достигнуло значение")
-                if bit == 0:
+                if int(combined_byte[i]) == 0:
                     print("На компараторе 2 недостигнуло значение")
         # Переворачиваем байты для корректного отображения
         reversed(code_dac_1)
@@ -179,8 +177,8 @@ class Calibrate:
         voltage_1 = [0, 0]
         voltage_2 = [0, 0]
         # Принимаем пакет
-        volt_1 = bytearray(data)[34:36]
-        volt_2 = bytearray(data)[36:38]
+        volt_1 = bytearray(data[1])[34:36]
+        volt_2 = bytearray(data[1])[36:38]
         # Формируем правильный массив байт
         voltage_1[0] = int(volt_1[1])
         voltage_1[1] = int(volt_1[0])
