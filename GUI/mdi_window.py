@@ -62,7 +62,7 @@ class MDIWindow(QMainWindow): # Использовать для основног
 
     def calibrate_channel(self):
         sub = QMdiSubWindow()
-        sub.resize(700,300)
+        sub.resize(900,300)
         #sub.minimumSize(600,300)
         sub.setWidget(CalibrateWindow(self.mdi))
         self.mdi.addSubWindow(sub)
@@ -70,7 +70,7 @@ class MDIWindow(QMainWindow): # Использовать для основног
 
     def calibrate_automatic_channel(self):
         sub = QMdiSubWindow()
-        sub.setMinimumSize(600,200)
+        sub.setMinimumSize(600, 200)
         sub.setWidget(CalibrateAutomaticWindow(self.mdi))
         self.mdi.addSubWindow(sub)
         sub.show()

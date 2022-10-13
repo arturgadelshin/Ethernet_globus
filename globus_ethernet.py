@@ -55,7 +55,7 @@ class Ethernet:
         write = list_uid+len_com+com
         #print('*'*57)
         em.sendall(write)
-        time.sleep(0.1)
+        #time.sleep(0.15)
         #data = self.client.recvfrom(1024,2) # Волшебная строчка!
         read = em.recvfrom(1024)
         # Попробовать функцию recv
@@ -66,7 +66,6 @@ class Ethernet:
     def delay_swap(self, command):
         em = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,)  # Установка типа сети UPD
         em.connect((self.host, self.port))
-        time.sleep(0.5)
         # socket.setdefaulttimeout(30) # Настройка таймаута
         uid = next(self.uid_2_byte)
         len_com = len_command(command)

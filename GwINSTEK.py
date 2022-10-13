@@ -7,6 +7,8 @@ from globus_ethernet import *
 
 
 class GwINSTEKWindow(QtWidgets.QDialog):
+    flag_setting = 0
+
     def __init__(self, parent=None):
         super().__init__(parent)
         #self.resize(300, 300)
@@ -32,7 +34,6 @@ class GwINSTEKWindow(QtWidgets.QDialog):
         self.combo_box_4.setToolTip('Установить калибровочный канал')
         self.combo_box_4.setToolTipDuration(3000)
         self.combo_box_4.setFont(QtGui.QFont("Times", 10))
-
 
         for port in serial_ports():
             self.combo_box_1.addItem(port)
@@ -65,6 +66,7 @@ class GwINSTEKWindow(QtWidgets.QDialog):
         self.button_write_settings.clicked.connect(self.set_com_port)
         self.layout.addLayout(self.oneblock, 1, 0)
         self.setLayout(self.layout)
+        GwINSTEKWindow.flag_setting = 1
 
     def set_com_port(self):
         port = self.combo_box_1.currentText()

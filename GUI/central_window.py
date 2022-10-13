@@ -186,9 +186,9 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         self.log.clear()
 
     def on_connect(self):
-        self.button_OK.setEnabled(False)  # Заблокировать кнопку
-        addr_IP = self.add_addr_IP.text() # Получить введенное значение в поле
-        port_IP = self.add_port_IP.text() # Получить введенное значение в поле
+        self.button_OK.setEnabled(False)   # Заблокировать кнопку
+        addr_IP = self.add_addr_IP.text()  # Получить введенное значение в поле
+        port_IP = self.add_port_IP.text()  # Получить введенное значение в поле
 
         # Установка addr и port
         Ethernet.port = int(port_IP)
@@ -234,7 +234,7 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         #self.log.setTextCursor(i[0])
 
         #self.stage_thread.thread_receive_data.connect(self.updatelog)
-        self.progress_bar.setValue(i + 1)
+        self.progress_bar.setValue(i)
 
     def log_update(self, text):
 

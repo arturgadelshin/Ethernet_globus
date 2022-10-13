@@ -105,17 +105,21 @@ class Calibrate:
             20: [128],  # 0x80
             21: [1],
         }
-        must_be = 5
-        for i, byte in enumerate(data[1]):
-            try:
-                if [byte] == must_be_bytes[i]:
-                    must_be -= 1
-            except KeyError:
-                continue
-        if must_be == 0:
-            print(f"Команда {bytes(must_be_bytes[20])} выполнена")
-        else:
-            print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
+        # must_be = 5
+        # for i, byte in enumerate(data[1]):
+        #     try:
+        #         if [byte] == must_be_bytes[i]:
+        #             must_be -= 1
+        #     except KeyError:
+        #         continue
+        # if must_be == 0:
+        #     print(f"Команда {bytes(must_be_bytes[20])} выполнена")
+        # else:
+        #     print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
+
+
+        # Даю задержку на время выполнения калибровки
+        #time.sleep(0.1)
 
         # Чтение данных командой запрос данных
         write = data_request(0)
@@ -127,17 +131,17 @@ class Calibrate:
             20: [4],  # 0x80
             21: [1],
         }
-        must_be = 5
-        for i, byte in enumerate(data[1]):
-            try:
-                if [byte] == must_be_bytes[i]:
-                    must_be -= 1
-            except KeyError:
-                continue
-        if must_be == 0:
-            print(f"Команда {bytes(must_be_bytes[20])} выполнена")
-        else:
-            print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
+        # must_be = 5
+        # for i, byte in enumerate(data[1]):
+        #     try:
+        #         if [byte] == must_be_bytes[i]:
+        #             must_be -= 1
+        #     except KeyError:
+        #         continue
+        # if must_be == 0:
+        #     print(f"Команда {bytes(must_be_bytes[20])} выполнена")
+        # else:
+        #     print(f"Команда {bytes(must_be_bytes[20])} невыполнена")
 
         frame = data[1][22:30]  # frame так сказал Юрий Иваныч Атаманчук
         channel_read = data[1][30]
@@ -147,9 +151,9 @@ class Calibrate:
         code_dac_1 = data[1][34:36]
         code_dac_2 = data[1][36:38]
         if step == step_read and channel == channel_read:
-            print("Команда отработана верно")
+            print(f"Команда {bytes(must_be_bytes[20])} отработана верно")
         else:
-            print("Команда отработана неверно")
+            print(f"Команда {bytes(must_be_bytes[20])} отработана неверно")
 
         # возможно придется преобразовать принятый байт в bin()
         combined_byte = bin(combined_byte)
@@ -169,9 +173,10 @@ class Calibrate:
                     print("На компараторе 2 достигнуло значение")
                 if int(combined_byte[i]) == 0:
                     print("На компараторе 2 недостигнуло значение")
+
         # Переворачиваем байты для корректного отображения
-        reversed(code_dac_1)
-        reversed(code_dac_2)
+
+
 
         # Функция преобразования кода в напряжение
         voltage_1 = [0, 0]
@@ -191,18 +196,4 @@ class Calibrate:
         voltage_dac_2 = int(res_voltage_2)
 
         return [code_dac_1, code_dac_2, voltage_dac_1, voltage_dac_2]
-
-
-#eth = Ethernet('192.168.0.1', 1233)
-
-
-# Между параметрами делать задержку в 3 секунды
-# f.parameter_01()
-# time.sleep(3)
-# f.parameter_01()
-# time.sleep(3)
-
-
-#f.all_parameters()
-
 

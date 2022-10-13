@@ -5,6 +5,7 @@ import os
 import sys
 import io
 
+
 def serial_ports():
     """ Lists serial port names
 
@@ -52,14 +53,14 @@ class VoltageRegulator:
     #     self.port.write(bytes(str(voltage), 'utf-8'))
     #     time.sleep(1.0)  # Необходимая задержка на время установления напряжения на выходе регулятора
 
-    def power(self, logic): # Включение/выключение источника
+    def power(self, logic):  # Включение/выключение источника
         if logic == 1:
             on = 'OUT1'+'\n'
             self.port.write(bytes(on, 'utf-8'))
+            time.sleep(4.0) # Задержка на время включения и инициализации платы
         if logic == 0:
             off = 'OUT0'+'\n'
             self.port.write(bytes(off, 'utf-8'))
-        time.sleep(1.0)
 
     def i_set(self, channel, i):  # Задание тока поканально
         return 'ISET'+str(channel)+':'+str(i)+'\n'
@@ -67,7 +68,11 @@ class VoltageRegulator:
     def v_set(self, channel, u):  # Задание напряжение поканально
         return 'VSET'+str(channel)+':'+str(u)+'\n'
 
-    def track(self, set): # Задание режима работы
+    def v_set_return(self, channel,):
+        return 'VSET' + str(channel) + '\n'
+
+    def track(self, set):  # Задание режима работы
+
         # По дефолту 0 - независимые каналы
         return 'TRACK' + str(set)+'\n'
 
@@ -75,22 +80,24 @@ class VoltageRegulator:
         i1 = self.i_set(self.channel_em, 0.7)
         self.port.write(bytes(i1, 'utf-8'))
         time.sleep(0.02)
-        #print(self.port.read(20))
         v1 = self.v_set(self.channel_em, self.voltage_em)
         self.port.write(bytes(v1, 'utf-8'))
         time.sleep(0.02)
         i2 = self.i_set(self.channel_calibrate, 0.1)
         self.port.write(bytes(i2, 'utf-8'))
         time.sleep(0.02)
-        v2 = self.v_set(self.channel_calibrate, 0.0)
-        self.port.write(bytes(v2, 'utf-8'))
-        time.sleep(0.02)
+        # v2 = self.v_set(self.channel_calibrate, 0.0)
+        # self.port.write(bytes(v2, 'utf-8'))
+        # time.sleep(0.02)
         self.power(1)
 
     def set_calibrate_voltage(self, voltage):
+        v_set_return = self.v_set_return(self.channel_calibrate)
+        self.port.write(bytes(v_set_return, 'utf-8'))
+        time.sleep(0.02)
         v1 = self.v_set(self.channel_calibrate, voltage)
         self.port.write(bytes(v1, 'utf-8'))
-        time.sleep(0.05)
+        time.sleep(1.5)
 
 
 
