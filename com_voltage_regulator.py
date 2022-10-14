@@ -94,10 +94,10 @@ class VoltageRegulator:
     def set_calibrate_voltage(self, voltage):
         v_set_return = self.v_set_return(self.channel_calibrate)
         self.port.write(bytes(v_set_return, 'utf-8'))
-        time.sleep(0.02)
+        time.sleep(0.05)
         v1 = self.v_set(self.channel_calibrate, voltage)
         self.port.write(bytes(v1, 'utf-8'))
-        time.sleep(1.5)
+        time.sleep(5.0)
 
 
 

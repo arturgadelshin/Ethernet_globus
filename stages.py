@@ -158,11 +158,11 @@ class Calibrate:
         # возможно придется преобразовать принятый байт в bin()
         combined_byte = bin(combined_byte)
         for i, byte in enumerate(combined_byte):
-            if i == 2:
-                if int(combined_byte[i]) == 1:
-                    print("Восходящая калиброка")
-                if int(combined_byte[i]) == 0:
-                    print("Нисходящая калиброка")
+            # if i == 2:
+            #     if int(combined_byte[i]) == 1:
+            #         print("Восходящая калиброка")
+            #     if int(combined_byte[i]) == 0:
+            #         print("Нисходящая калиброка")
             if i == 8:
                 if int(combined_byte[i]) == 1:
                     print("На компараторе 1 достигнуло значение")
