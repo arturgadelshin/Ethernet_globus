@@ -294,11 +294,18 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.threeblock = QtWidgets.QHBoxLayout()
         self.table = QTableWidget(256, 8)
         self.vbox = QtWidgets.QVBoxLayout()
+
         self.button_export = QtWidgets.QPushButton("Экспорт в *.xlsx")
         self.button_export.setFont(QtGui.QFont("Times", 10))
         self.button_export.setFixedWidth(200)
         self.button_export.clicked.connect(self.export_calibrate)
         self.button_export.setEnabled(False)  # Заблокировать кнопку
+
+        self.button_break_calibrate= QtWidgets.QPushButton("Остановить калибровку")
+        self.button_break_calibrate.setFont(QtGui.QFont("Times", 10))
+        self.button_break_calibrate.setFixedWidth(200)
+        self.button_break_calibrate.clicked.connect(self.break_calibrate)
+        self.button_break_calibrate.setEnabled(False)  # Заблокировать кнопку
 
         self.button_graf = QtWidgets.QPushButton("Показать график")
         self.button_graf.setFont(QtGui.QFont("Times", 10))
@@ -306,6 +313,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_graf.clicked.connect(self.graf_calibrate)
         self.button_graf.setEnabled(False)  # Заблокировать кнопку
 
+        self.vbox.addWidget(self.button_break_calibrate)
         self.vbox.addWidget(self.button_export)
         self.vbox.addWidget(self.button_graf)
         self.vbox.addStretch()  # Пружина
@@ -471,6 +479,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
     def on_started(self):  # Запускается в начале потока
         self.start_time = datetime.now()
+        self.button_break_calibrate.setEnabled(True)  # Разблокировать кнопку
 
     def on_finished(self): # Запускается после окончания выполнения потока просто для наглядности
         msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
@@ -504,6 +513,11 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(str(k_calibrate)))
         if number == 31:
             self.counter += 1
+
+    def break_calibrate(self):
+        self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
+
+
 
     # def table_update(self, data, number, vector, voltage):
     #     if number % 2 == 0:

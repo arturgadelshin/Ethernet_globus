@@ -210,6 +210,7 @@ def write_32_bit_mask(addr_write_data, mask, write_data):
 8…11	    Данные	    Записываемые данные, 4 байта
 """
 
+
 def stop():
     code_command = [0x08]
     reserved = [0x00]
@@ -221,6 +222,7 @@ def stop():
 Команда "Остановить" предназначена для прерывания выполняемых команд в ЭМ.
 Команда передаётся без дополнительных данных.
 """
+
 
 def reset_reg_state(mask):
     code_command = [0x09]
@@ -241,6 +243,7 @@ def reset_reg_state(mask):
 На данную команду ЭМ отвечает пакетом данных, с обновленным 
 регистром состояния.
 """
+
 
 def program_start():
     code_command = [0x10]
@@ -308,12 +311,11 @@ def setting_em(mask, write_data):
 
 
 def smk(write_data):
-    code_command = [0x12]
+    code_command = [0x0C]
     reserved = [0x00]
     data = []
 
     data_d = re.findall(r'\w\w', write_data)
-
     for i in data_d:
         data.append(int(i, 16))
 

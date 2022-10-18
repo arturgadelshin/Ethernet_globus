@@ -6,7 +6,6 @@ import time
 from GUI.calibrate import *
 
 
-
 class Stages_01():
     "Итерфейсный блок"
     pars = Parsing() # Создание объекта Парсера, для распарсивания принятых пакетов
@@ -32,7 +31,8 @@ class Stages_01():
         self.pars.info_packet(data[1])
         add_log_file(data[1])
         must_be = ''
-        return [data, must_be]
+        valid = True
+        return [data, must_be, valid]
 
     def parameter_02(self):
         write = reset_em(1)
@@ -41,7 +41,8 @@ class Stages_01():
         self.pars.info_packet(data[1])
         add_log_file(data[1])
         must_be = ''
-        return [data, must_be]
+        valid = True
+        return [data, must_be, valid]
 
     def parameter_03(self):
         write = read_testinfo_and_rgsmk(0)
@@ -50,7 +51,8 @@ class Stages_01():
         self.pars.info_packet(data[1])
         add_log_file(data[1])
         must_be = ''
-        return [data, must_be]
+        valid = True
+        return [data, must_be, valid]
 
     def parameter_04(self):
         write = read_testinfo_and_rgsmk(1) # Было так
@@ -59,7 +61,8 @@ class Stages_01():
         self.pars.info_packet(data[1])
         add_log_file(data[1])
         must_be = ''
-        return [data, must_be]
+        valid = True
+        return [data, must_be, valid]
 
     def all_parameters(self):
         self.parameter_01()
@@ -68,19 +71,30 @@ class Stages_01():
         self.parameter_04()
 
 
-class Stage_02:
+class Stages_02:
     "Блок с IP адресом"
+    pars = Parsing()  # Создание объекта Парсера, для распарсивания принятых пакетов
+    recieve_data = WindowParsing()
+
     def __init__(self):
-        self.name_stage = 'Проверка работы с IP адресом'
+        self.name_stage = 'СМК'
+        self.name_param_01 = 'Проведение самоконтроля модуля'
         add_log_file(self.name_stage)
 
-    def parameter_01(self,IP):
-        self.name_param_01 = 'Смена IP адреса'
-        write = replace_ip(IP)
+    def parameter_01(self):
+        must_be = ''
+        write = smk('01')
         add_log_file(self.name_param_01)
         data = Ethernet().swap(write)
-        self.pars.info_parsing_packet(data[0])
-        add_log_file(data)
+        self.pars.reg_state_packet(data[1])
+        add_log_file(data[1])
+        #valid = True
+        recieve_data = data[1][21]    # Получаем статус команды
+        if hex(recieve_data) == hex(0x01):  #[0x02] - из протокола проверки МКС
+            valid = True
+        else:
+            valid = False
+        return [data, must_be, valid]
 
     def parameter_02(self, repeat):
         pass
