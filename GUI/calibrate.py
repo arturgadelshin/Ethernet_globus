@@ -1,22 +1,22 @@
-import time
-from PyQt5.Qt import *
-from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
-from GUI.central_window import *
-from com_voltage_regulator import *
-from globus_ethernet import *
+from GUI.grafics import GraficWindow
 from GwINSTEK import *
 from export import *
 from datetime import datetime
+import numpy as np
+import pandas as pd
+from GUI.central_window import QHLine
+from PyQt5 import QtWidgets, QtGui, QtCore
 
 
 class CalibrateThread(QtCore.QThread):
     thread_signal = QtCore.pyqtSignal(int)
     thread_data = QtCore.pyqtSignal(list, int, int, str)
     count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
-    count_channel_calibrate = 32 # Вернуть 32.
+    count_channel_calibrate = 32  # Вернуть 32.
 
     def __init__(self, parent=None):
+        #self.running = False  # Флаг выполнения
         QtCore.QThread.__init__(self, parent)
 
     def run(self):
@@ -228,6 +228,11 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     voltages = [0, 0, 0, 0, 0, 0, 0, 0]
     step = 0
     counter = 0
+    table_df = 0
+
+    # Создание пустого массива размером 32 - каналы - 8 уровни напряжений
+    #np.zeros((32, 8))
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -301,11 +306,11 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_export.clicked.connect(self.export_calibrate)
         self.button_export.setEnabled(False)  # Заблокировать кнопку
 
-        self.button_break_calibrate= QtWidgets.QPushButton("Остановить калибровку")
-        self.button_break_calibrate.setFont(QtGui.QFont("Times", 10))
-        self.button_break_calibrate.setFixedWidth(200)
-        self.button_break_calibrate.clicked.connect(self.break_calibrate)
-        self.button_break_calibrate.setEnabled(False)  # Заблокировать кнопку
+        self.button_write_k_calibrate = QtWidgets.QPushButton("Записать коэффициенты в ПЗУ")
+        self.button_write_k_calibrate.setFont(QtGui.QFont("Times", 10))
+        self.button_write_k_calibrate.setFixedWidth(200)
+        self.button_write_k_calibrate.clicked.connect(self.write_k_calibrate)
+        self.button_write_k_calibrate.setEnabled(False)  # Заблокировать кнопку
 
         self.button_graf = QtWidgets.QPushButton("Показать график")
         self.button_graf.setFont(QtGui.QFont("Times", 10))
@@ -313,7 +318,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_graf.clicked.connect(self.graf_calibrate)
         self.button_graf.setEnabled(False)  # Заблокировать кнопку
 
-        self.vbox.addWidget(self.button_break_calibrate)
+        self.vbox.addWidget(self.button_write_k_calibrate)
         self.vbox.addWidget(self.button_export)
         self.vbox.addWidget(self.button_graf)
         self.vbox.addStretch()  # Пружина
@@ -334,6 +339,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.automatic_calibrate_thread.thread_signal.connect(self.on_change, QtCore.Qt.QueuedConnection)
         self.automatic_calibrate_thread.thread_data.connect(self.table_update, QtCore.Qt.QueuedConnection)
         self.automatic_calibrate_thread.finished.connect(self.on_finished)
+
         # sub.setWidget(self.setLayout(self.layout))
 
         # Пятый блок
@@ -344,6 +350,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.progress_bar.setRange(0, count)
         self.fourblock.addWidget(self.progress_bar)
         self.layout.addLayout(self.fourblock, 5, 0)
+
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
 
@@ -445,7 +452,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         return groupBox
 
     def run_automatic_calibrate(self):
-        #set_voltage = Calibrate()
         addr_IP = self.add_addr_IP.text()  # Получить введенное значение в поле
         port_IP = self.add_port_IP.text()  # Получить введенное значение в поле
 
@@ -479,7 +485,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
     def on_started(self):  # Запускается в начале потока
         self.start_time = datetime.now()
-        self.button_break_calibrate.setEnabled(True)  # Разблокировать кнопку
 
     def on_finished(self): # Запускается после окончания выполнения потока просто для наглядности
         msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
@@ -489,15 +494,17 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
                               parent=None
                               )
         msg_box.exec_()
+        self.return_table()
         self.button_export.setEnabled(True)  # Разблокировать кнопку
         self.button_graf.setEnabled(True)  # Разблокировать кнопку
-        self.automatic_calibrate_thread.yieldCurrentThread() # Принудительное завершение потока
+        #self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
 
     def on_change(self, i):  # Принимаем число из потока в Progressbar
         self.progress_bar.setValue(i)
 
     def run_thread(self):
-        self.automatic_calibrate_thread.start()  # Запускаем поток
+        if not self.automatic_calibrate_thread.isRunning():
+            self.automatic_calibrate_thread.start()  # Запускаем поток
 
     def table_update(self, data, number, vector, voltage):
         self.channel = int(number)
@@ -507,51 +514,59 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.table.setItem((32*self.counter)+number, 3, QTableWidgetItem(str(vector)))
         self.table.setItem((32*self.counter)+number, 4, QTableWidgetItem(str(int(data[2]))))
         self.table.setItem((32*self.counter)+number, 5, QTableWidgetItem(str(int(data[3]))))
-        average_code = None
+        average_code = (data[2]+data[3])/2
         self.table.setItem((32*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
-        k_calibrate = 0
-        self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(str(k_calibrate)))
+        try:
+            k_calibrate = (float(voltage)/11.05)/((3.3*int(data[2]))/4095)
+        except ZeroDivisionError:
+            k_calibrate = 0
+        self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(format(k_calibrate, '.2f')))
         if number == 31:
             self.counter += 1
 
-    def break_calibrate(self):
-        self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
+    def write_k_calibrate(self):
+        ...
 
-
-
-    # def table_update(self, data, number, vector, voltage):
-    #     if number % 2 == 0:
-    #         self.channel = int((number / 2) + 1)
-    #         self.table.setItem((64 * self.counter) + number, 0, QTableWidgetItem(str((64 * self.counter) + number)))
-    #         self.table.setItem((64 * self.counter) + number, 1, QTableWidgetItem(str(self.channel)))
-    #         self.table.setItem((64 * self.counter) + number, 2, QTableWidgetItem(str(voltage)))
-    #         self.table.setItem((64 * self.counter) + number, 3, QTableWidgetItem(str(vector)))
-    #         self.table.setItem((64 * self.counter) + number, 4, QTableWidgetItem(str(int(data[2]))))
-    #         self.table.setItem((64 * self.counter) + number, 5, QTableWidgetItem(str(int(data[3]))))
-    #         average_code = None
-    #         self.table.setItem((64 * self.counter) + number, 6, QTableWidgetItem(str(average_code)))
-    #         k_calibrate = 0
-    #         self.table.setItem((64 * self.counter) + number, 7, QTableWidgetItem(str(k_calibrate)))
-    #     else:
-    #         self.table.setItem((64 * self.counter) + number, 0, QTableWidgetItem(str((64 * self.counter) + number)))
-    #         self.table.setItem((64 * self.counter) + number, 1, QTableWidgetItem(str(self.channel)))
-    #         self.table.setItem((64 * self.counter) + number, 2, QTableWidgetItem(str(voltage)))
-    #         self.table.setItem((64 * self.counter) + number, 3, QTableWidgetItem(str(vector)))
-    #         self.table.setItem((64 * self.counter) + number, 4, QTableWidgetItem(str(data[2])))
-    #         self.table.setItem((64 * self.counter) + number, 5, QTableWidgetItem(str(data[3])))
-    #
-    #         average_code = None
-    #         self.table.setItem((64 * self.counter) + number, 6, QTableWidgetItem(str(average_code)))
-    #         k_calibrate = 0
-    #         self.table.setItem((64 * self.counter) + number, 7, QTableWidgetItem(str(k_calibrate)))
-    #     if number == 63:
-    #         self.counter += 1
+    def closeEvent(self, event):
+        self.hide()                                      # Скрываем окно
+        self.automatic_calibrate_thread.wait(2000)       # Время чтобы закончить
+        event.accept()                                   # Закрываем окно
 
     def export_calibrate(self):
         exportToExcel(self)
 
     def graf_calibrate(self):
-        pass
+        grafic_window = GraficWindow()
+        grafic_window.show()
+        grafic_window.exec_()  # Не знаю как, но это работает
+
+    # @staticmethod
+    # def split_list(arr, size):
+    #     arrs = []
+    #     while len(arr) > size:
+    #         pice = arr[:size]
+    #         arrs.append(pice)
+    #         arr = arr[size:]
+    #     arrs.append(arr)
+    #     return arrs
+
+    def return_table(self):
+        data_voltage = [self.table.item(row, 2).text()           # 2 - столбец с напряжением
+                        for row in range(self.table.rowCount())
+                        if self.table.item(row, 2) is not None]  # 2 - столбец с напряжением
+
+        data_k_calibrate = [self.table.item(row, 7).text()              # 7 - столбец с коэф. калибровки
+                            for row in range(self.table.rowCount())
+                            if self.table.item(row, 7) is not None]      # 7 - столбец с коэф. калибровки
+
+        table = {'Voltage': data_voltage, 'K_kalibrate': data_k_calibrate}
+        df = pd.DataFrame(table)
+        # create excel writer
+        writer = pd.ExcelWriter('table_for_grafics.xlsx')
+        # write dataframe to excel sheet named 'marks'
+        df.to_excel(writer, 'Sheet1')
+        # save the excel file
+        writer.save()
 
 
 class SetVoltageRegulatorWindow(QtWidgets.QDialog):

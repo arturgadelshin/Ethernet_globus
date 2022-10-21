@@ -1,7 +1,7 @@
 from PyQt5.Qt import *
 from PyQt5 import QtWidgets, QtGui, QtCore
 from stages import *
-from GUI.central_window import *
+#from GUI.central_window import *
 from com_voltage_regulator import *
 from globus_ethernet import *
 

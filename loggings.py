@@ -1,6 +1,15 @@
 import datetime
 
 
+def control_check():
+    pass
+
+
+def clear_log_file():
+    with open("log.txt", "w") as f:
+        f.close()
+
+
 def add_log_file(*args):
     with open("log.txt", "at") as f:
         lst = []

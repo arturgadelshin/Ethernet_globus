@@ -1,5 +1,5 @@
 from base_interface_function import*
-from logging import *
+from loggings import *
 from globus_ethernet import *
 from parsing_ethernet import *
 import time
@@ -13,7 +13,6 @@ class Stages_01():
     #eth = Ethernet()
     #eth = Ethernet('192.168.0.1', 1233)
 
-
     def __init__(self):
         self.stage = 'Наименование проверки'
         self.name_stage = 'Проверка интерфесных фукнций'
@@ -22,7 +21,7 @@ class Stages_01():
         self.name_param_03 = 'Чтение тестовой информации без сброса'
         self.name_param_04 = 'Чтение тестовой информации со сбросом'
         self.state = [1, 1, 1, 1]  # Кол-во состояний равно кол-ву параметров
-        add_log_file(self.stage + ' - ' + self.name_stage)
+        #add_log_file(self.stage + ' - ' + self.name_stage)
 
     def parameter_01(self):
         write = reset_em(0)
@@ -55,7 +54,7 @@ class Stages_01():
         return [data, must_be, valid]
 
     def parameter_04(self):
-        write = read_testinfo_and_rgsmk(1) # Было так
+        write = read_testinfo_and_rgsmk(1)  # Было так
         add_log_file(self.name_param_04)
         data = Ethernet().swap(write)
         self.pars.info_packet(data[1])
@@ -79,7 +78,6 @@ class Stages_02:
     def __init__(self):
         self.name_stage = 'СМК'
         self.name_param_01 = 'Проведение самоконтроля модуля'
-        add_log_file(self.name_stage)
 
     def parameter_01(self):
         must_be = ''
@@ -90,11 +88,48 @@ class Stages_02:
         add_log_file(data[1])
         #valid = True
         recieve_data = data[1][21]    # Получаем статус команды
-        if hex(recieve_data) == hex(0x01):  #[0x02] - из протокола проверки МКС
-            valid = True
+        if hex(recieve_data) == hex(0x02):  #[0x02] - из протокола проверки МКС команда в процессе выполнения
+            valid_recieve = True
         else:
+            valid_recieve = False
+        write = data_request(0)
+        add_log_file('Запрос данных')
+        data = Ethernet().swap(write)
+        recieve_data = data[1][2:4]
+        if hex(recieve_data[0]) == hex(0x01):  # [0x01] - из протокола проверки МКС байт состояния
+            valid_rg = True
+        else:
+            valid_rg = False
+        msg = self.pars.reg_state_packet(data[1])
+        add_log_file(msg)
+
+        # Здесь добавить команду чтение тестовой информации и ее анализ
+        write = read_testinfo_and_rgsmk(0)
+        add_log_file('Чтение тестовой информации без сброса регистра СМК')
+        data = Ethernet().swap(write)
+        recieve_data = data[1][22:]
+        add_log_file(recieve_data)
+
+        # Здесь сделать анализ
+
+        write = read_testinfo_and_rgsmk(1)
+        add_log_file('Чтение тестовой информации со сбросом регистра СМК')
+        data = Ethernet().swap(write)
+        recieve_data = data[1][22:]
+        add_log_file(recieve_data)
+
+        # Здесь сделать анализ
+
+        # Блок проверки
+        if (valid_recieve is True) and (valid_rg is True):
+            valid = True
+            add_log_file(data[1])
+        else:
+
             valid = False
+            add_log_file('НГ', data[1])
         return [data, must_be, valid]
+
 
     def parameter_02(self, repeat):
         pass

@@ -1,10 +1,6 @@
 from PyQt5.QtWidgets import QGridLayout
-
-from GUI.calibrate import *
 from GUI.central_window import *
 from PyQt5 import QtWidgets, QtGui, QtCore
-from stages import *
-from globus_ethernet import *
 from GwINSTEK import *
 
 
@@ -76,7 +72,7 @@ class StageThread(QtCore.QThread):
         voltage_regutalor.power(0)  # Подать питание
 
 
-class CentralWindow(QtWidgets.QWidget): # Использовать для других окон
+class CentralWindow(QtWidgets.QWidget):  # Использовать для других окон
     # Ниже список с параметрами из st - экземпляра объекта Stage_01
     interface_param = [QStandardItem(Stages_01().name_param_01), QStandardItem(Stages_01().name_param_02),
                        QStandardItem(Stages_01().name_param_03), QStandardItem(Stages_01().name_param_04)]
@@ -259,10 +255,7 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
         self.treeView.setColumnWidth(0, 350)  # Задать ширину 1 столбца
         self.treeView.expandAll()  # Отобразить все дочерние элементы раскрыть дерево
 
-        # ############################################
-        # self.stage_thread.start()  # Запускаем поток
-        # ############################################
-
+        clear_log_file()  # Очистка текстового лога
 
     def on_started(self):  # Запускается в начале потока
         ...
@@ -318,10 +311,6 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
             #print(text_read)
         self.log.appendPlainText(text_read)
 
-
-
-        #print(self.log.__slots__)
-
     def run_thread(self):
         if GwINSTEKWindow.flag_setting == 0:  # Чтобы второй раз при повторе не выбирать COM
             # Задание COM порта
@@ -345,29 +334,7 @@ class CentralWindow(QtWidgets.QWidget): # Использовать для дру
             i.setCheckState(2)  # Задание по умолчанию флаг неактивен
 
     def calibrate(self):
-        sub = QMdiSubWindow()
-
-        #sub = QMainWindow()
-        sub.setCentralWidget(CalibrateWindow())
-        #sub.addDockWidget()
-        #sub.widget
-        sub.setFixedWidth(600)
-        sub.setWidget(CalibrateWindow())
-        #self.mdi.addSubWindow(sub)
-        sub.show()
-        #CalibrateWindow()
-
-    def update_tree(self):
-        brush_red = QBrush(Qt.red)
-        brush_green = QBrush(Qt.green)
-        #self.header_stage_01.setBackground(brush_red)
-        for i in self.interface_param:
-            ...
-            #print(i.setBackground(brush_red))
-
-                #appendRow(i)  # Вывод строк для дерева списка
-
-
+        pass
 
 
 class QHLine(QFrame):

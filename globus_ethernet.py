@@ -1,6 +1,6 @@
 import struct
 
-import logging
+import loggings
 import socket
 import time
 import timeit

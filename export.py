@@ -131,3 +131,4 @@ def focusItemView(win):
     if type(views) == type([]) and len(views) > 0:
         return views[0]
     return None
+
