@@ -360,7 +360,23 @@ def calibrate(step, vector, channel):
     return bytes(msg)
 
 
-# print(replace_ip('192.168.0.2'))
-# print(read_data_any_addr("FC7F0020", "0400"))
-# print(write_data_any_addr("007F0020", "0400", "AAAAAAAA"))
-# print(write_32_bit_mask("FC7F0020", "AAAAAAAA", "5555FFFF"))
+def write_k_kalibrate(*args):
+    code_command = [0x83]
+    reserved = [0x00]
+    # Зарезервированные и вроде как нерачие байты Атаманчук Ю.И сказал
+    undefined_bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]*3  # Их получается 24 байта
+    # Список (! c учетом младшего байта), который будет хранить коэффициенты уже в int
+    # Данный список в 2 раза больше, чем количество коэффицентов
+    data_int_k = ([0])*len(*args)*2
+    for i in range(0, len(*args)):
+        # Умножить на 100
+        data_int_k[(i*2)+1] = int((args[0][i])*100)
+    msg = (code_command + reserved + undefined_bytes + data_int_k)
+    return bytes(msg)
+
+
+def read_k_kalibrate():
+    code_command = [0x84]
+    reserved = [0x00]
+    msg = (code_command + reserved)
+    return bytes(msg)

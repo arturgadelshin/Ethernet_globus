@@ -1,3 +1,4 @@
+import base_interface_function
 from stages import *
 from GUI.grafics import GraficWindow
 from GwINSTEK import *
@@ -7,6 +8,7 @@ import numpy as np
 import pandas as pd
 from GUI.central_window import QHLine
 from PyQt5 import QtWidgets, QtGui, QtCore
+from base_interface_function import read_k_kalibrate
 
 
 class CalibrateThread(QtCore.QThread):
@@ -310,7 +312,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_write_k_calibrate.setFont(QtGui.QFont("Times", 10))
         self.button_write_k_calibrate.setFixedWidth(200)
         self.button_write_k_calibrate.clicked.connect(self.write_k_calibrate)
-        self.button_write_k_calibrate.setEnabled(False)  # Заблокировать кнопку
+        self.button_write_k_calibrate.setEnabled(True)  # Заблокировать кнопку
 
         self.button_graf = QtWidgets.QPushButton("Показать график")
         self.button_graf.setFont(QtGui.QFont("Times", 10))
@@ -525,7 +527,57 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
             self.counter += 1
 
     def write_k_calibrate(self):
-        ...
+        voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
+        voltage_regutalor.set_port()  # Задать порт
+        voltage_regutalor.power_em()  # Подать питание
+
+        rows = self.table.rowCount()
+        k_kalibtares = []
+        for i in range(0, rows):
+            if self.table.model().index(i, 7).data() == None:
+                k_kalibtares.append(float(0))  # где 7 - индекс столбца K_kalibrate в таблице table
+            else:
+                k_kalibtares.append(float(self.table.model().index(i, 7).data()))  # где 7 - индекс столбца K_kalibrate в таблице table
+        write_rom = write_k_kalibrate(k_kalibtares)  # Запись в ПЗУ
+        add_log_file("Запись калибровочных коэффициентов")
+        data = Ethernet().swap(write_rom)
+        add_log_file(data[0])  # Запись в лог, какие коэффициенты записали
+        write = reset_em(1)  # Исходное Hard
+        Ethernet().delay_swap(write)
+
+        write = base_interface_function.read_k_kalibrate()  # Чтение калибровочных коэффициентов
+        Ethernet().swap(write)
+        write = data_request(0)  # Запрос данных (калибровочных коэффициентов)
+        data = Ethernet().swap(write)
+        add_log_file("Чтение калибровочных коэффициентов")
+        add_log_file(data[1])  # Запись коэффициентов в лог
+
+        # 8 байт - Frame, 24 байта - любых см. команду write_k_kalibrate()
+        read_k_kalibrate = data[1][22+8+24:]
+        # Выцепляем из команды записанные коэффициенты
+        write_massive_k_kalibrate = write_rom[26:]
+        valid = True
+        for i in range(0, len(write_massive_k_kalibrate)):
+            if (read_k_kalibrate[i]) != write_massive_k_kalibrate[i]:
+                valid = False
+
+        if valid == True:
+            msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
+                                  "Запись коээфициентов выполнена:",
+                                  "Успешно!",
+                                  buttons=QtWidgets.QMessageBox.Close,
+                                  parent=None
+                                  )
+        else:
+            msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
+                                  "Запись коээфициентов выполнена:",
+                                  "Неуспешно! \n"
+                                  "Для более подробной информации смотрите лог-файл",
+                                  buttons=QtWidgets.QMessageBox.Close,
+                                  parent=None
+                                  )
+        msg_box.exec_()
+        voltage_regutalor.power(0)
 
     def closeEvent(self, event):
         self.hide()                                      # Скрываем окно
