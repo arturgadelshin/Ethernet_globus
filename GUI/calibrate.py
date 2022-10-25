@@ -9,6 +9,7 @@ import pandas as pd
 from GUI.central_window import QHLine
 from PyQt5 import QtWidgets, QtGui, QtCore
 from base_interface_function import read_k_kalibrate
+from pandas.core.api import DataFrame
 
 
 class CalibrateThread(QtCore.QThread):
@@ -312,7 +313,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_write_k_calibrate.setFont(QtGui.QFont("Times", 10))
         self.button_write_k_calibrate.setFixedWidth(200)
         self.button_write_k_calibrate.clicked.connect(self.write_k_calibrate)
-        self.button_write_k_calibrate.setEnabled(True)  # Заблокировать кнопку
+        self.button_write_k_calibrate.setEnabled(False)  # Заблокировать кнопку
 
         self.button_graf = QtWidgets.QPushButton("Показать график")
         self.button_graf.setFont(QtGui.QFont("Times", 10))
@@ -499,6 +500,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.return_table()
         self.button_export.setEnabled(True)  # Разблокировать кнопку
         self.button_graf.setEnabled(True)  # Разблокировать кнопку
+        self.button_write_k_calibrate.setEnabled(True)  # Разблокировать кнопку
         #self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
 
     def on_change(self, i):  # Принимаем число из потока в Progressbar
@@ -519,7 +521,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         average_code = (data[2]+data[3])/2
         self.table.setItem((32*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
         try:
-            k_calibrate = (float(voltage)/11.05)/((3.3*int(data[2]))/4095)
+            k_calibrate = (float(voltage)/11.05)/((3.3*int(average_code))/4095)
         except ZeroDivisionError:
             k_calibrate = 0
         self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(format(k_calibrate, '.2f')))
@@ -530,7 +532,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
         voltage_regutalor.set_port()  # Задать порт
         voltage_regutalor.power_em()  # Подать питание
-
         rows = self.table.rowCount()
         k_kalibtares = []
         for i in range(0, rows):
@@ -538,7 +539,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
                 k_kalibtares.append(float(0))  # где 7 - индекс столбца K_kalibrate в таблице table
             else:
                 k_kalibtares.append(float(self.table.model().index(i, 7).data()))  # где 7 - индекс столбца K_kalibrate в таблице table
-        write_rom = write_k_kalibrate(k_kalibtares)  # Запись в ПЗУ
+        write_rom = write_k_polinoms(k_kalibtares)  # Запись в ПЗУ
         add_log_file("Запись калибровочных коэффициентов")
         data = Ethernet().swap(write_rom)
         add_log_file(data[0])  # Запись в лог, какие коэффициенты записали
@@ -553,9 +554,10 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         add_log_file(data[1])  # Запись коэффициентов в лог
 
         # 8 байт - Frame, 24 байта - любых см. команду write_k_kalibrate()
-        read_k_kalibrate = data[1][22+8+24:]
+        undefined_bytes = 24  # Было 24 - решил убрать для экономии памяти
+        read_k_kalibrate = data[1][22+8+undefined_bytes:]
         # Выцепляем из команды записанные коэффициенты
-        write_massive_k_kalibrate = write_rom[26:]
+        write_massive_k_kalibrate = write_rom[2 + undefined_bytes:]
         valid = True
         for i in range(0, len(write_massive_k_kalibrate)):
             if (read_k_kalibrate[i]) != write_massive_k_kalibrate[i]:

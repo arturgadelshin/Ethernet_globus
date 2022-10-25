@@ -1,8 +1,8 @@
 import struct
 import re
-from ast import literal_eval
-from parsing_ethernet import convert_base
-
+import pandas as pd
+from scipy.optimize import curve_fit
+from numpy import array, exp
 # Здесь будут отписаны все базовые интерфейсные функции
 
 """
@@ -360,18 +360,64 @@ def calibrate(step, vector, channel):
     return bytes(msg)
 
 
-def write_k_kalibrate(*args):
+def write_k_polinoms(*args):
     code_command = [0x83]
     reserved = [0x00]
-    # Зарезервированные и вроде как нерачие байты Атаманчук Ю.И сказал
+    # Зарезервированные и вроде как нерачие байты Атаманчук Ю.И сказал (УБРАЛ)
     undefined_bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]*3  # Их получается 24 байта
-    # Список (! c учетом младшего байта), который будет хранить коэффициенты уже в int
-    # Данный список в 2 раза больше, чем количество коэффицентов
-    data_int_k = ([0])*len(*args)*2
-    for i in range(0, len(*args)):
-        # Умножить на 100
-        data_int_k[(i*2)+1] = int((args[0][i])*100)
-    msg = (code_command + reserved + undefined_bytes + data_int_k)
+    df = pd.read_excel('table_for_grafics_new.xlsx')
+    index_polinoms = ['a', 'b', 'c', 'd']
+    # Нужно чтобы переименовать столбцы по-новому для удобства работы с ними
+    for i, name in enumerate(df.columns):
+        if i < 32:
+            df.rename(columns={df.columns[i + 1]: i + 1}, inplace=True)
+        else:
+            break
+
+    massive_k_polinoms = []
+    list_voltage = array(df['Voltage'].values.tolist())  # Получаем столбец с напряжением
+
+    def mapping(values_x, a, b, c, d):
+        return a * values_x ** 3 + b * values_x ** 2 + c * values_x + d
+
+    # Создадим пустой словарь
+    list_channel = []
+    for i in range(1, 33):
+        list_channel.append(f'channel_{i}')
+
+    dict_channel = dict.fromkeys(list_channel)
+
+    for i in range(1, len(df.columns)):
+        list_k_kalibrate = array(df[i].values.tolist())  # Получаем столбец с коэффициентами
+        args, _ = curve_fit(mapping, list_voltage, list_k_kalibrate, method='lm')
+        # print("Arguments: ", args)
+        # Создаем список с отмасштабируемыми целыми коэффициентами
+        int_args = [abs(int(args[0] * 10 ** 8)),  # 10^8
+                    abs(int(args[1] * 10 ** 6)),  # 10^6
+                    abs(int(args[2] * 10 ** 5)),  # 10^5
+                    abs(int(args[3] * 10 ** 3))]  # 10^3
+
+        dict_channel[f'channel_{i}'] = pd.Series(args, index=index_polinoms)  # Подсовываем коэффициенты полинома
+
+        # Укладываем коэффициенты по логике: младший байт вперед
+        for i in range(0, len(int_args)):
+            if int_args[i] < 255:
+                massive_k_polinoms.append(int_args[i])
+                massive_k_polinoms.append(0)
+            else:
+                rez = int_args[i].to_bytes((int_args[i].bit_length() + 7) // 8, 'big')
+                massive_k_polinoms.append(rez[1])
+                massive_k_polinoms.append(rez[0])
+
+        # Дозаполняем нулями, потом на их место допишем коэффициенты при температуре
+        for i in range(0, 8):
+            massive_k_polinoms.append(0)
+
+        df_k_polinoms = pd.DataFrame(dict_channel)  # Создание DataFrame с коэффициентами полинома
+        writer = pd.ExcelWriter('table_k_polinoms.xlsx')
+        df_k_polinoms.to_excel(writer, 'Sheet1')
+        writer.save()
+    msg = (code_command + reserved + undefined_bytes + massive_k_polinoms)
     return bytes(msg)
 
 
