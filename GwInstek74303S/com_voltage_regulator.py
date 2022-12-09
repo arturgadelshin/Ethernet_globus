@@ -36,7 +36,7 @@ def serial_ports():
 
 
 class VoltageRegulator:
-    speeds = ['1200','2400', '4800', '9600', '19200', '38400', '57600', '115200']
+    speeds = ['1200', '2400', '4800', '9600', '19200', '38400', '57600', '115200']
     comport = 'COM3'
     speed = '9600'
     channel_em = 1
@@ -47,17 +47,17 @@ class VoltageRegulator:
         self.port = serial.Serial(self.comport, self.speed)
         time.sleep(2)
 
-    # def set_voltage(self, voltage):
-    #     self.port.write(bytes(str(voltage), 'utf-8'))
-    #     time.sleep(1.0)
-    #     self.port.write(bytes(str(voltage), 'utf-8'))
-    #     time.sleep(1.0)  # Необходимая задержка на время установления напряжения на выходе регулятора
+        # def set_voltage(self, voltage):
+        #     self.port.write(bytes(str(voltage), 'utf-8'))
+        #     time.sleep(1.0)
+        #     self.port.write(bytes(str(voltage), 'utf-8'))
+        #     time.sleep(1.0)  # Необходимая задержка на время установления напряжения на выходе регулятора
 
     def power(self, logic):  # Включение/выключение источника
         if logic == 1:
             on = 'OUT1'+'\n'
             self.port.write(bytes(on, 'utf-8'))
-            time.sleep(4.0) # Задержка на время включения и инициализации платы
+            time.sleep(4.0)  # Задержка на время включения и инициализации платы
         if logic == 0:
             off = 'OUT0'+'\n'
             self.port.write(bytes(off, 'utf-8'))
@@ -99,5 +99,10 @@ class VoltageRegulator:
         self.port.write(bytes(v1, 'utf-8'))
         time.sleep(5.0)
 
+    def port_close(self):
+        self.port.close()
 
-
+    def set_fast_voltage(self, voltage):
+        v1 = self.v_set(self.channel_calibrate, voltage)
+        self.port.write(bytes(v1, 'utf-8'))
+        time.sleep(0.1)  # Серия S 10 мс, сделал 100 мс, чтобы наверняка

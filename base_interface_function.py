@@ -1,8 +1,6 @@
 import struct
 import re
-import pandas as pd
-from scipy.optimize import curve_fit
-from numpy import array, exp
+
 # Здесь будут отписаны все базовые интерфейсные функции
 
 """
@@ -246,7 +244,7 @@ def reset_reg_state(mask):
 
 
 def program_start():
-    code_command = [0x10]
+    code_command = [0x0A]
     reserved = [0x00]
     msg = (code_command + reserved)
     return bytes(msg)
@@ -261,21 +259,64 @@ def program_start():
 """
 
 
-def setting_em(mask, write_data):
-    code_command = [0x11]
+def setting_for_work(mode, **kwargs):
+    code_command = [0x0B]
     reserved = [0x00]
-    mask_ = []
-    data = []
+    # Возможно c маской уточнить у Атаманчука
+    if mode == 1:  # Циклический режим
+        mask = [0x08, 0x00, 0x00, 0x00, 0x00, 0x01]
+    else:   # Одиночный режим
+        mask = [0x08, 0x00, 0x00, 0x00, 0x00, 0x00]
+    count_channel = 32
+    count_DAC = 2
+    ref_voltage = 3.3
+    bit_depth_DAC = 12  # Разрядность ЦАПа
+    max_code_DAC = (2 ** bit_depth_DAC) - 1  # Максимальный код ЦАПа
+    reference_voltage = ref_voltage / max_code_DAC  # 1 единица кода, Вольт
+    k_transformation = 11.05  # Расчетный коэффициент трансформации
+    # Создадим пустой список заготовку, где 2 - 2 байта под одно значение кода
+    list_data = [0] * count_channel * count_DAC * 2
+    for i in kwargs.keys():
+        dac_1 = round(kwargs.get(i)[0] / k_transformation / reference_voltage)
+        # Ниже укладка младшим байтом вперед
+        if dac_1 < 255:
+            list_data[2 * (int(i) - 1)] = dac_1
+            list_data[2 * (int(i) - 1) + 1] = 0
+        else:
+            rez = dac_1.to_bytes((dac_1.bit_length() + 7) // 8, 'big')
+            # print(rez)
+            # print(i)
+            list_data[2 * (int(i) - 1)] = rez[1]
+            list_data[2 * (int(i) - 1) + 1] = rez[0]
 
-    mask_d = re.findall(r'\w\w', mask)
-    data_d = re.findall(r'\w\w', write_data)
+        dac_2 = round(kwargs.get(i)[1] / k_transformation / reference_voltage)
+        # Ниже укладка младшим байтом вперед
+        if dac_2 < 255:
+            list_data[count_channel * 2 + 2 * (int(i) - 1)] = dac_2
+            list_data[count_channel * 2 + 2 * (int(i) - 1) + 1] = 0
+        else:
+            rez = dac_2.to_bytes((dac_2.bit_length() + 7) // 8, 'big')
+            list_data[count_channel * 2 + 2 * (int(i) - 1)] = rez[1]
+            list_data[count_channel * 2 + 2 * (int(i) - 1) + 1] = rez[0]
 
-    for i in mask_d:
-        mask_.append(int(i, 16))
-    for i in data_d:
-        data.append(int(i, 16))
+    int_mask_channels = 0  # Маска каналов побитово
+    for i in kwargs.keys():
+        int_mask_channels = int_mask_channels + 2 ** (int(i) - 1)
 
-    msg = (code_command + reserved + mask_ + data)
+    mask_channels = [0] * 4
+    if int_mask_channels < 255:
+        mask_channels[0:4] = int_mask_channels, 0, 0, 0
+    if 255 < int_mask_channels < 65535:
+        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+        mask_channels[0:4] = rez[0], rez[1], 0, 0
+    if 65535 < int_mask_channels < 16777215:
+        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+        mask_channels[0:4] = rez[0], rez[1], rez[2], 0
+    if 16777215 < int_mask_channels < 4294967295:
+        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+        mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
+
+    msg = (code_command + reserved + mask + list_data + mask_channels)
     return bytes(msg)
 
 
@@ -342,87 +383,3 @@ def smk(write_data):
 Коды команд 0х0D…0x7F зарезервированы для возможного наращивания 
 перечня базовых функций.
 """
-
-
-def calibrate(step, vector, channel):
-    code_command = [0x80]
-    reserved = [0x00]
-    data = [step, vector]
-
-    if channel < 255:
-        data.append(channel)
-        data.append(0)
-    else:
-        rez = channel.to_bytes((channel.bit_length() + 7) // 8, 'big')
-        data.append(rez[1])
-        data.append(rez[0])
-    msg = (code_command + reserved + data)
-    return bytes(msg)
-
-
-def write_k_polinoms(*args):
-    code_command = [0x83]
-    reserved = [0x00]
-    # Зарезервированные и вроде как нерачие байты Атаманчук Ю.И сказал (УБРАЛ)
-    undefined_bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]*3  # Их получается 24 байта
-    df = pd.read_excel('table_for_grafics_new.xlsx')
-    index_polinoms = ['a', 'b', 'c', 'd']
-    # Нужно чтобы переименовать столбцы по-новому для удобства работы с ними
-    for i, name in enumerate(df.columns):
-        if i < 32:
-            df.rename(columns={df.columns[i + 1]: i + 1}, inplace=True)
-        else:
-            break
-
-    massive_k_polinoms = []
-    list_voltage = array(df['Voltage'].values.tolist())  # Получаем столбец с напряжением
-
-    def mapping(values_x, a, b, c, d):
-        return a * values_x ** 3 + b * values_x ** 2 + c * values_x + d
-
-    # Создадим пустой словарь
-    list_channel = []
-    for i in range(1, 33):
-        list_channel.append(f'channel_{i}')
-
-    dict_channel = dict.fromkeys(list_channel)
-
-    for i in range(1, len(df.columns)):
-        list_k_kalibrate = array(df[i].values.tolist())  # Получаем столбец с коэффициентами
-        args, _ = curve_fit(mapping, list_voltage, list_k_kalibrate, method='lm')
-        # print("Arguments: ", args)
-        # Создаем список с отмасштабируемыми целыми коэффициентами
-        int_args = [abs(int(args[0] * 10 ** 8)),  # 10^8
-                    abs(int(args[1] * 10 ** 6)),  # 10^6
-                    abs(int(args[2] * 10 ** 5)),  # 10^5
-                    abs(int(args[3] * 10 ** 3))]  # 10^3
-
-        dict_channel[f'channel_{i}'] = pd.Series(args, index=index_polinoms)  # Подсовываем коэффициенты полинома
-
-        # Укладываем коэффициенты по логике: младший байт вперед
-        for i in range(0, len(int_args)):
-            if int_args[i] < 255:
-                massive_k_polinoms.append(int_args[i])
-                massive_k_polinoms.append(0)
-            else:
-                rez = int_args[i].to_bytes((int_args[i].bit_length() + 7) // 8, 'big')
-                massive_k_polinoms.append(rez[1])
-                massive_k_polinoms.append(rez[0])
-
-        # Дозаполняем нулями, потом на их место допишем коэффициенты при температуре
-        for i in range(0, 8):
-            massive_k_polinoms.append(0)
-
-        df_k_polinoms = pd.DataFrame(dict_channel)  # Создание DataFrame с коэффициентами полинома
-        writer = pd.ExcelWriter('table_k_polinoms.xlsx')
-        df_k_polinoms.to_excel(writer, 'Sheet1')
-        writer.save()
-    msg = (code_command + reserved + undefined_bytes + massive_k_polinoms)
-    return bytes(msg)
-
-
-def read_k_kalibrate():
-    code_command = [0x84]
-    reserved = [0x00]
-    msg = (code_command + reserved)
-    return bytes(msg)

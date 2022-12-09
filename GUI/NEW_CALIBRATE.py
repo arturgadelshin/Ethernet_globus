@@ -1,55 +1,12 @@
+import stages
+# from stages import *
 from GUI.grafics import GraficWindow
 from GwInstek74303S.GUI.GwINSTEK import *
-from base_interface_function import *
 from export import *
 from datetime import datetime
 from GUI.central_window import QHLine
 from PyQt5 import QtWidgets, QtGui, QtCore
 from special_interface_function import *
-from stages import Calibrate, CompareLevel
-from globus_ethernet import Ethernet
-from loggings import *
-
-
-# class CalibrateThread(QtCore.QThread):
-#     thread_signal = QtCore.pyqtSignal(int)
-#     thread_data = QtCore.pyqtSignal(list, int, int, str)
-#     count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
-#     count_channel_calibrate = 32  # Вернуть 32.
-#
-#
-#     def __init__(self, parent=None):
-#         #self.running = False  # Флаг выполнения
-#         QtCore.QThread.__init__(self, parent)
-#
-#     def run(self):
-#         set_voltage = Calibrate()
-#         voltages = CalibrateAutomaticWindow.voltages  # Получить напряжение из формы
-#         step = CalibrateAutomaticWindow.step          # Получить шаг из формы
-#
-#         voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-#         voltage_regulator.set_port()  # Задать порт
-#         voltage_regulator.power_em()  # Подать питание
-#
-#         # self.table.setRowCount(count_channel_calibrate)
-#
-#         i = 0
-#         for voltage in voltages:
-#             voltage_regulator.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
-#             for channel in range(0, self.count_channel_calibrate):
-#                 if float(voltage) < 15.0:
-#                     # В data будут содержаться результаты измерений
-#                     vector = 0
-#                     data = set_voltage.write_voltage_for_calibrate(step, vector, (channel + 1))
-#                     self.thread_data.emit(data, channel, vector, voltage)
-#                 else:
-#                     # В data будут содержаться результаты измерений
-#                     vector = 0
-#                     data = set_voltage.write_voltage_for_calibrate(step, vector, (channel + 1))
-#                     self.thread_data.emit(data, channel, vector, voltage)
-#                 i += 1
-#                 self.thread_signal.emit(i)  # Для прогрессбара
-#         voltage_regulator.power(0)          # Выключить питание после выполнения калибровки
 
 
 class CalibrateThread(QtCore.QThread):
@@ -58,136 +15,89 @@ class CalibrateThread(QtCore.QThread):
     count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
     count_channel_calibrate = 32  # Вернуть 32.
 
-
     def __init__(self, parent=None):
         #self.running = False  # Флаг выполнения
         QtCore.QThread.__init__(self, parent)
 
     def run(self):
-        # set_voltage = Calibrate()
+        set_voltage = Calibrate()
         voltages = CalibrateAutomaticWindow.voltages  # Получить напряжение из формы
         step = CalibrateAutomaticWindow.step          # Получить шаг из формы
 
-        voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        voltage_regulator.set_port()  # Задать порт
-        voltage_regulator.power_em()  # Подать питание
+
         # self.table.setRowCount(count_channel_calibrate)
-
+        compare = stages.CompareLevel()
+        voltage_regulator = VoltageRegulator()  # Создать объект Regulator
+        voltage_regulator.set_port()            # Задать порт
+        voltage_regulator.power_em()            # Подать питание
         i = 0
-
-        level_off = 32.0  # 32В
+        ref_voltage = 3.3 # Величина опорного напряжения
         k_transformation = 11.05  # Расчетный коэффициент трансформации
         bit_depth_DAC = 12  # Разрядность ЦАПа
-        ref_voltage = 3.3
         max_code_DAC = (2 ** bit_depth_DAC) - 1  # Максимальный код ЦАПа
         reference_voltage = ref_voltage / max_code_DAC  # 1 единица кода, Вольт
-        number_of_successful_operations = 25  # Задаем число успешных чтений подряд
-        # flag_search_voltage = False
-
-        # voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        # voltage_regulator.set_port()  # Задать порт
-        levels = []
-        compare = CompareLevel()
         for voltage in voltages:
-            # Должно быть с 0, поставил с 4 для отладки, так как кривые импульсы
+            voltage_regulator.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
             for channel in range(0, self.count_channel_calibrate):
-                # Для первого уровня
-                up_voltage_1 = float(voltage)  # Задал верхний уровень, так как в реальности напряжение будет меньше
-                down_voltage_1 = float(voltage)/2  # Задал половину уровня, так как коэфф. калибровки
-                                                   #  в реальности не должен быть равен 2
+                # В data будут содержаться результаты измерений
+                vector = 0
+                max_voltage = 32.0
+                data = [0]*4  # Буфер под результат
+                # Для level_1
                 count = 0
-                voltage_regulator.set_calibrate_voltage(float(voltage))  # Задаем напряжение на источнике, в первый раз
-                while True:
-                    up_voltage_1 = round(up_voltage_1, 2)
-                    channel_volt = {str(channel + 1): [up_voltage_1, up_voltage_1]}  # Формирование уровней
+                level_1 = float(voltage) + 2  # Даем начальный уровень на 2 вольта больше чем искомый
+                level_2 = max_voltage
+                while level_1 > 0:
+                    channel_volt = {str(channel+1): [level_1, level_2]}
                     logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
-                    # log_1 = int.from_bytes(logs[0][0], byteorder='big', signed=True)
+                    log_1 = int.from_bytes(logs[0][0], byteorder='big', signed=True)
+                    log_2 = int.from_bytes(logs[0][1], byteorder='big', signed=True)
                     # Маска контролируемых каналов побитово
                     int_mask_channels = round(2 ** int(channel))
 
-                    mask_channels = [0] * 4
-                    if int_mask_channels < 255:
-                        mask_channels[0:4] = int_mask_channels, 0, 0, 0
-                    if 255 < int_mask_channels < 65535:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], 0, 0
-                    if 65535 < int_mask_channels < 16777215:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], 0
-                    if 16777215 < int_mask_channels < 4294967295:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
-                    mask = [0] * 4
-                    for i in range(0, 4):
-                        mask[i] = logs[0][0][i] & mask_channels[i]
-                    if mask == mask_channels:
+                    # Накладывать log_1 и log_2 на int_mask_channels
+                    # Если после наложения log_1 != int_mask_channels - значит переключился
+                    mask = log_1 & int_mask_channels
+                    if mask == int_mask_channels:
                         count += 1
                     else:
                         count = 0
-                        up_voltage_1 -= step/100
-
-                    if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
-                        levels.append(channel_volt)  # Запомним в список текущий уровень срабатывания
-                        add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на выключение канала {channel + 1}'
-                                     f' равен {up_voltage_1}(В)')
+                    if count == 5:  # Количество успешных срабатываний подряд
+                        data[0] = level_1 / k_transformation / reference_voltage
+                        data[2] = level_1
                         break
-                    if up_voltage_1 <= down_voltage_1:
-                        levels.append({str(channel + 1): [0, level_off]})
-                        add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
-                                     f' не найден')
-                        break
-                # Для второго уровня
-                up_voltage_2 = float(voltage)
-                down_voltage_2 = float(voltage)/2  # Берем нижнюю границы от предыдущего поиска сделал для ускорения поиска
+                    level_1 -= int(step)/10  # Переводим в вольты
+                # Для level_2
                 count = 0
-                while True:
-                    down_voltage_2 = round(down_voltage_2, 2)
-                    channel_volt = {str(channel + 1): [down_voltage_2, down_voltage_2]}
-
-                    logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
-                    # log_2 = int.from_bytes(logs[0][1], byteorder='big', signed=True)
+                level_1 = max_voltage
+                level_2 = float(voltage) + 2  # Даем начальный уровень на 2 вольта больше чем искомый
+                while level_2 > 0:
+                    channel_volt = {str(channel): [level_1, level_2]}
+                    logs = self.compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
+                    log_1 = int.from_bytes(logs[0][0], byteorder='big', signed=True)
+                    log_2 = int.from_bytes(logs[0][1], byteorder='big', signed=True)
                     # Маска контролируемых каналов побитово
                     int_mask_channels = round(2 ** int(channel))
 
-                    mask_channels = [0] * 4
-                    if int_mask_channels < 255:
-                        mask_channels[0:4] = int_mask_channels, 0, 0, 0
-                    if 255 < int_mask_channels < 65535:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], 0, 0
-                    if 65535 < int_mask_channels < 16777215:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], 0
-                    if 16777215 < int_mask_channels < 4294967295:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
-                    mask = [0] * 4
-                    for i in range(0, 4):
-                        mask[i] = logs[0][1][i] & mask_channels[i]
-                    if mask != mask_channels:
+                    # Накладывать log_1 и log_2 на int_mask_channels
+                    # Если после наложения log_1 != int_mask_channels - значит переключился
+                    mask = log_2 & int_mask_channels
+                    if mask != int_mask_channels:
                         count += 1
                     else:
                         count = 0
-                        down_voltage_2 += step/100
+                    if count == 5:  # Количество успешных срабатываний подряд
+                        data[1] = level_1/k_transformation/reference_voltage
+                        data[3] = level_1
+                    level_1 -= int(step)/1000  # Переводим в вольты
 
-                    if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
-                        levels.append(channel_volt)  # Запомним в список текущий уровень срабатывания
-                        add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
-                                     f' равен {down_voltage_2}(В)')
-                        break
-                    if down_voltage_2 >= up_voltage_2:
-                        levels.append({str(channel + 1): [level_off, 0]})
-                        add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
-                                     f' не найден')
-                        break
+                #data = set_voltage.write_voltage_for_calibrate(step, vector, (channel + 1))
+                #data = [code_dac_1, code_dac_2, voltage_dac_1, voltage_dac_2]
+                self.thread_data.emit(data, channel, vector, voltage)
 
-                code_dac_1 = round(up_voltage_1/ k_transformation/ reference_voltage)
-                code_dac_2 = round(down_voltage_2 / k_transformation / reference_voltage)
-                self.thread_data.emit([0, 0, code_dac_1, code_dac_2], channel, 0, voltage)
                 i += 1
                 self.thread_signal.emit(i)  # Для прогрессбара
-        voltage_regulator.power(0)  # Выключить питание после выполнения калибровки
-
+        voltage_regutalor.power(0)          # Выключить питание после выполнения калибровки
 
 
 class CalibrateWindow(QtWidgets.QWidget):
@@ -332,10 +242,10 @@ class CalibrateWindow(QtWidgets.QWidget):
             com_port.setWindowTitle('COM')
             com_port.exec_()
 
-        voltage_regulator = VoltageRegulator()  # Создать объект Regulator
+        voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
         #if GwINSTEKWindow.flag_setting == 0:  # Чтобы второй раз не устанавливать настройки COM
-        voltage_regulator.set_port()  # Задать порт
-        voltage_regulator.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
+        voltage_regutalor.set_port()  # Задать порт
+        voltage_regutalor.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
 
         set_voltage = Calibrate()
         step = int(self.step.text())
@@ -343,16 +253,16 @@ class CalibrateWindow(QtWidgets.QWidget):
         channel = int(self.nmb_channel.text())
 
         if channel != '' and step != '' and voltage != '':
-            voltage_regulator.power_em()  # Подать питание
+            voltage_regutalor.power_em()  # Подать питание
             # write = reset_em(1)
             # Ethernet().delay_swap(write)
-            voltage_regulator.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
+            #voltage_regutalor.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
             data = set_voltage.write_voltage_for_calibrate(step, vector, channel)
             self.dac_1.setText(str(data[0]))
             self.dac_2.setText(str(data[1]))
             self.voltage_1.setText(str(data[2]))
             self.voltage_2.setText(str(data[3]))
-            voltage_regulator.power(0)  # Выключить источник питания
+            voltage_regutalor.power(0)  # Выключить источник питания
         else:
             msg_box = QMessageBox(QtWidgets.QMessageBox.Warning,
                                   "Внимание!",
@@ -579,7 +489,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         groupBox = QGroupBox("Задайте шаг калибровки")
         groupBox.setFont(QtGui.QFont("Times", 10))
         groupBox.setFixedWidth(200)
-        self.step_label = QtWidgets.QLabel('Шаг калибровки')
+        self.step_label = QtWidgets.QLabel('Шаг калибровки, мВ')
         self.step = QtWidgets.QLineEdit()
         self.step.setText('1')
         self.step.setFixedWidth(50)
@@ -623,12 +533,12 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         com_port.exec_()
 
     def on_started(self):  # Запускается в начале потока
-        self.start_time = datetime.datetime.now()
+        self.start_time = datetime.now()
 
     def on_finished(self):  # Запускается после окончания выполнения потока просто для наглядности
         msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
                               "Калибровка окончена!",
-                              "Время калибровки: {} ".format((datetime.datetime.now() - self.start_time)),
+                              "Время калибровки: {} ".format((datetime.now() - self.start_time)),
                               buttons=QtWidgets.QMessageBox.Close,
                               parent=None
                               )
@@ -665,9 +575,9 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
             self.counter += 1
 
     def write_k_polinoms(self):
-        voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        voltage_regulator.set_port()  # Задать порт
-        voltage_regulator.power_em()  # Подать питание
+        voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
+        voltage_regutalor.set_port()  # Задать порт
+        voltage_regutalor.power_em()  # Подать питание
         rows = self.table.rowCount()
         k_polinoms = []
         for i in range(0, rows):
@@ -715,7 +625,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
                                   parent=None
                                   )
         msg_box.exec_()
-        voltage_regulator.power(0)
+        voltage_regutalor.power(0)
 
     def closeEvent(self, event):
         self.hide()                                      # Скрываем окно
@@ -760,7 +670,6 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
 
 class SetVoltageRegulatorWindow(QtWidgets.QDialog):
-
     def __init__(self, parent=None):
         super().__init__(parent)
         #self.resize(300, 300)
@@ -800,10 +709,9 @@ class SetVoltageRegulatorWindow(QtWidgets.QDialog):
     def set_com_port(self):
         port = self.combo_box_1.currentText()
         speed = self.combo_box_2.currentText()
-        VoltageRegulator.port = port  # Задать порт из формы
-        VoltageRegulator.speed = speed  # Задать скорость из формы
+        VoltageRegulator.port = port
+        VoltageRegulator.speed = speed
         self.close()
-
 
 
 class SearchThread(QtCore.QThread):
@@ -821,20 +729,21 @@ class SearchThread(QtCore.QThread):
         compare_level = CompareLevel()
         voltages = MeasurementErrorWindow.voltages  # Получить напряжение из формы
 
-        voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        voltage_regulator.set_port()            # Задать порт
-        voltage_regulator.power_em()            # Подать питание
+        # voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
+        # voltage_regutalor.set_port()            # Задать порт
+        # voltage_regutalor.power_em()            # Подать питание
+
         i = 0
         flag_dac_1 = False
         flag_dac_2 = False
         flag_search_compare = False
 
         # Здесь запросим коэффициенты полинома
-        write = read_k_polinoms()  # Чтение коэффициентов полиномов
+        write = read_k_polinoms()  # Чтение  коэффициентов полиновом
         Ethernet().swap(write)
-        write = data_request(0)  # Запрос данных (калибровочных коэффициентов)
+        write = data_request(0)  # Зас данных (калибровочных коэффициентов)
         data = Ethernet().swap(write)
-        # 8 байт - Frame, 24 байта - любых см. команду write_k_polinoms()
+        # 8 байт - Frame, 24 байта - любых см. команду write_k_kalibrate()
         undefined_bytes = 24  # Было 24 - решил убрать для экономии памяти
         k_polinoms = data[1][22 + 8 + undefined_bytes:]
         k_polinoms = k_polinoms[0:self.count_channel_calibrate*self.count_bytes_in_one_channel]
@@ -864,31 +773,31 @@ class SearchThread(QtCore.QThread):
                     voltage_down = round(voltage_calibrate - ((voltage_calibrate*error)/100), 2)
                     voltage_up = round(voltage_calibrate + ((voltage_calibrate*error)/100), 2)
                     levels = {str(channel+1): [voltage_down, voltage_up]}
-                    logs = compare_level.compare_level(0, **levels)
-                    log_1 = logs[0]
-                    log_2 = logs[1]
-                    log_r_1 = []
-                    log_r_2 = []
-                    for i in log_1:
-                        log_r_1.append(i)
-                    log_r_1.reverse()
-                    log_1_int = int.from_bytes(bytes(log_r_1), byteorder='big')
-                    for i in log_2:
-                        log_r_2.append(i)
-                    log_r_2.reverse()
-                    log_2_int = int.from_bytes(bytes(log_r_2), byteorder='big')
+                    DACs = compare_level.compare_level(**levels)
+                    dac_read_1 = DACs[0]
+                    dac_read_2 = DACs[1]
+                    dac_r_1 = []
+                    dac_r_2 = []
+                    for i in dac_read_1:
+                        dac_r_1.append(i)
+                    dac_r_1.reverse()
+                    dac_1 = int.from_bytes(bytes(dac_r_1), byteorder='big')
+                    for i in dac_read_2:
+                        dac_r_2.append(i)
+                    dac_r_2.reverse()
+                    dac_2 = int.from_bytes(bytes(dac_r_2), byteorder='big')
 
                     # Маска контролируемых каналов побитово
                     int_mask_channels = round(2 ** channel)
 
-                    # Накладывать log_1_int и log_2_int на int_mask_channels
-                    # Если после наложения log_1_int != int_mask_channels - значит переключился
-                    mask_1 = log_1_int & int_mask_channels
-                    mask_2 = log_2_int & int_mask_channels
+                    # Накладывать dac_1 и dac_2 на int_mask_channels
+                    # Если после наложения dac_1 != int_mask_channels - значит переключился
+                    mask_1 = dac_1 & int_mask_channels
+                    mask_2 = dac_2 & int_mask_channels
                     if (mask_1 != int_mask_channels) and (mask_2 != int_mask_channels):
                         flag_search_compare = True  # Погрешность найдена
                         list_error.append(error)
-                    error -= 1.0  # Уменьшаем погрешности (шаг)
+                    error -= 5.0  # Уменьшаем погрешности (шаг)
 
                 i += 1
                 self.thread_signal.emit(i)  # Для прогрессбара
@@ -1157,12 +1066,12 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         com_port.exec_()
 
     def on_started(self):  # Запускается в начале потока
-        self.start_time = datetime.datetime.now()
+        self.start_time = datetime.now()
 
     def on_finished(self):  # Запускается после окончания выполнения потока просто для наглядности
         msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
                               "Оценка погрешности окончена!",
-                              "Время оценки: {} ".format((datetime.datetime.now() - self.start_time)),
+                              "Время оценки: {} ".format((datetime.now() - self.start_time)),
                               buttons=QtWidgets.QMessageBox.Close,
                               parent=None
                               )

@@ -14,7 +14,7 @@ import numpy as np
 class GraficWindow(QDialog):
     def __init__(self, parent=None):
         super(GraficWindow, self).__init__(parent)
-        self.figure = plt.figure(figsize=(20,15))
+        self.figure = plt.figure(figsize=(20, 15))
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.button = QPushButton('Построить график')

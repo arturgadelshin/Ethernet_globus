@@ -1,7 +1,17 @@
-from PyQt5.QtWidgets import QGridLayout
+from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItem, QBrush, QStandardItemModel
+from PyQt5.QtWidgets import QPlainTextEdit, QScrollArea, QGridLayout, QAbstractItemView, QFrame
 from GUI.central_window import *
+from GwInstek74303S.GUI.GwINSTEK import GwINSTEKWindow
+from GwInstek74303S.com_voltage_regulator import *
+from stages import Stages_03, Stages_02, Stages_01
 from PyQt5 import QtWidgets, QtGui, QtCore
-from GwINSTEK import *
+from globus_ethernet import Ethernet
+from loggings import *
+
+
+# voltage_regulator.power_em()  # Включаем питание
 
 
 class StageThread(QtCore.QThread):
@@ -9,6 +19,7 @@ class StageThread(QtCore.QThread):
     thread_data = QtCore.pyqtSignal(list)
     thread_interface_update = QtCore.pyqtSignal(list, int)
     thread_smk_update = QtCore.pyqtSignal(list, int)
+    thread_single_mode_update = QtCore.pyqtSignal(list, int)
     clear_color_in_tree = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
@@ -16,23 +27,28 @@ class StageThread(QtCore.QThread):
 
     def run(self):
         # Здесь живёт отдельный поток
-        voltage_regutalor = VoltageRegulator()  # Создать объект Regulator
-        voltage_regutalor.set_port()  # Задать порт
-        voltage_regutalor.power_em()  # Подать питание
-
+        voltage_regulator = VoltageRegulator()
+        voltage_regulator.set_port()  # Создаем соединение с портом
+        voltage_regulator.power_em()  # Подать питание
+        voltage_regulator.port_close()  # Закрыть порт - нужно, чтобы создать новый объект и изменять напряжение
         st_1 = Stages_01()
         st_2 = Stages_02()
+        st_3 = Stages_03()
         # Ниже список с параметрами из st_x
         interface_param = CentralWindow.interface_param
         smk_param = CentralWindow.smk_param
-
+        single_mode = CentralWindow.single_mode
         list_interface_param = [st_1.parameter_01, st_1.parameter_02,
                                 st_1.parameter_03, st_1.parameter_04]  # Все параметры
 
         list_smk_param = [st_2.parameter_01, ]
 
+        list_single_mode = [st_3.parameter_01, st_3.parameter_02, st_3.parameter_03]
+
+
         list_flag_interface = []  # Кол-во флагов должно быть равно кол-ву параметров
         list_flag_smk = []  # Кол-во флагов должно быть равно кол-ву параметров
+        list_flag_single_mode = []  # Кол-во флагов должно быть равно кол-ву параметров
 
         for i in interface_param:
             if i.checkState() == 0:
@@ -45,6 +61,12 @@ class StageThread(QtCore.QThread):
                 list_flag_smk.append(0)
                 continue
             list_flag_smk.append(1)
+
+        for i in single_mode:
+            if i.checkState() == 0:
+                list_flag_single_mode.append(0)
+                continue
+            list_flag_single_mode.append(1)
 
         # Вычитка буфера перед началом работы с платой не требуется
         # Исходное soft очищает буфер модуля
@@ -61,6 +83,7 @@ class StageThread(QtCore.QThread):
                 #QtCore.QThread.msleep(100)
             self.signal_count_param = i
             self.thread_signal.emit(i)  # Передача через сигнал значения для LoadBar
+
         for i in range(0, (len(list_flag_smk))):
             if list_flag_smk[i] == 1:
                 receive_data = list_smk_param[i]()
@@ -69,7 +92,15 @@ class StageThread(QtCore.QThread):
                 #QtCore.QThread.msleep(100)
             self.thread_signal.emit(i+1+self.signal_count_param)  # Передача через сигнал значения для LoadBar
 
-        voltage_regutalor.power(0)  # Подать питание
+        for i in range(0, (len(list_flag_single_mode))):
+            if list_flag_single_mode[i] == 1:
+                receive_data = list_single_mode[i]()
+                self.thread_single_mode_update.emit(receive_data, i)
+
+                # QtCore.QThread.msleep(100)
+            self.thread_signal.emit(i + 1 + self.signal_count_param)  # Передача через сигнал значения для LoadBar
+        voltage_regulator.set_port()  # Создаем соединение с портом
+        voltage_regulator.power(0)  # Выключить питание
 
 
 class CentralWindow(QtWidgets.QWidget):  # Использовать для других окон
@@ -78,7 +109,8 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
                        QStandardItem(Stages_01().name_param_03), QStandardItem(Stages_01().name_param_04)]
 
     smk_param = [QStandardItem(Stages_02().name_param_01), ]
-
+    single_mode = [QStandardItem(Stages_03().name_param_01), QStandardItem(Stages_03().name_param_02),
+                   QStandardItem(Stages_03().name_param_03)]
     # Здесь задаются цвета годе/негоден
     brush_red = QBrush(Qt.red)
     brush_green = QBrush(Qt.green)
@@ -211,6 +243,7 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
         self.stage_thread.thread_signal.connect(self.on_change, QtCore.Qt.QueuedConnection)
         self.stage_thread.thread_interface_update.connect(self.tree_interface_update, QtCore.Qt.QueuedConnection)
         self.stage_thread.thread_smk_update.connect(self.tree_smk_update, QtCore.Qt.QueuedConnection)
+        self.stage_thread.thread_single_mode_update.connect(self.tree_single_mode_update, QtCore.Qt.QueuedConnection)
         self.stage_thread.thread_data.connect(self.log_update, QtCore.Qt.QueuedConnection)
         self.stage_thread.clear_color_in_tree.connect(self.clear_color, QtCore.Qt.QueuedConnection)
         #sub.setWidget(self.setLayout(self.layout))
@@ -230,21 +263,27 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
 
         self.header_stage_01 = QStandardItem(Stages_01().name_stage)
         self.header_stage_02 = QStandardItem(Stages_02().name_stage)
+        self.header_stage_03 = QStandardItem(Stages_03().name_stage)
         self.model.appendRow([self.header_stage_01])  # Заголовок вложенной строки
         self.model.appendRow([self.header_stage_02])  # Заголовок вложенной строки
+        self.model.appendRow([self.header_stage_03])  # Заголовок вложенной строки
 
         # Вывод списка всех проверяемых параметров
-
+        # Для интерфейсных параметров
         for i in self.interface_param:
             i.setCheckable(True)  #  Добавление флажка
             i.setCheckState(2)   # Задание по умолчанию флаг активен
             self.header_stage_01.appendRow(i)  # Вывод строк для дерева списка
-
+        # Для самоконтроля
         for i in self.smk_param:
             i.setCheckable(True)  # Добавление флажка
             i.setCheckState(2)  # Задание по умолчанию флаг активен
             self.header_stage_02.appendRow(i)  # Вывод строк для дерева списка
-
+        # Для одиночного режима
+        for i in self.single_mode:
+            i.setCheckable(True)  # Добавление флажка
+            i.setCheckState(2)  # Задание по умолчанию флаг активен
+            self.header_stage_03.appendRow(i)  # Вывод строк для дерева списка
 
 
         self.button_addition.setEnabled(True)  # Раблокировать кнопку
@@ -271,7 +310,7 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
         self.progress_bar.setValue(i)
 
 
-    def tree_interface_update(self, text, iter):  # Функция которая обновляет в потоке цвет параметра
+    def tree_interface_update(self, text, iter):  # Функция, которая обновляет в потоке цвет параметра
         interface_param = CentralWindow.interface_param
         if interface_param[iter].checkState() == 2:
             if text[2] == True:
@@ -279,7 +318,7 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
             else:
                 interface_param[iter].setBackground(self.brush_red)
 
-    def tree_smk_update(self, text, iter):  # Функция которая обновляет в потоке цвет параметра
+    def tree_smk_update(self, text, iter):  # Функция, которая обновляет в потоке цвет параметра
         smk_param = CentralWindow.smk_param
         if smk_param[iter].checkState() == 2:
             if text[2] == True:
@@ -287,12 +326,23 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
             else:
                 smk_param[iter].setBackground(self.brush_red)
 
+    def tree_single_mode_update(self, text, iter):  # Функция, которая обновляет в потоке цвет параметра
+        single_mode = CentralWindow.single_mode
+        if single_mode[iter].checkState() == 2:
+            if text[1] == True:
+                single_mode[iter].setBackground(self.brush_green)
+            else:
+                single_mode[iter].setBackground(self.brush_red)
+
     def clear_color(self):  # Функция очистки дерева от цветов годен/негоден
         interface_param = CentralWindow.interface_param
         smk_param = CentralWindow.smk_param
+        single_mode = CentralWindow.single_mode
         for i in interface_param:
             i.setBackground(self.brush_reset_color)
         for i in smk_param:
+            i.setBackground(self.brush_reset_color)
+        for i in single_mode:
             i.setBackground(self.brush_reset_color)
 
 
@@ -326,11 +376,17 @@ class CentralWindow(QtWidgets.QWidget):  # Использовать для др�
         for i in self.smk_param:
             i.setCheckState(0)   # Задание по умолчанию флаг неактивен
 
+        for i in self.single_mode:
+            i.setCheckState(0)  # Задание по умолчанию флаг неактивен
+
     def set_all(self):
         for i in self.interface_param:
             i.setCheckState(2)   # Задание по умолчанию флаг активен
 
         for i in self.smk_param:
+            i.setCheckState(2)  # Задание по умолчанию флаг неактивен
+
+        for i in self.single_mode:
             i.setCheckState(2)  # Задание по умолчанию флаг неактивен
 
     def calibrate(self):

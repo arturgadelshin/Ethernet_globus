@@ -42,24 +42,28 @@ class Ethernet:
     port = 0
 
     def __init__(self):
-        pass
+        socket.setdefaulttimeout(60)
+
 
     def swap(self, command):
-        em = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,)  # Установка типа сети UPD
-        em.connect((self.host, self.port))
-        #socket.setdefaulttimeout(5) # Настройка таймаута
-        uid = next(self.uid_2_byte)
-        len_com = len_command(command)
-        com = command
-        list_uid = bytes([(uid[0]), uid[1]])
-        write = list_uid+len_com+com
-        #print('*'*57)
-        em.sendall(write)
-        #time.sleep(0.15)
-        #data = self.client.recvfrom(1024,2) # Волшебная строчка!
-        read = em.recvfrom(1024)
-        # Попробовать функцию recv
-        em.close()
+        em = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, )  # Установка типа сети UPD
+        try:
+            em.connect((self.host, self.port))
+            uid = next(self.uid_2_byte)
+            len_com = len_command(command)
+            com = command
+            list_uid = bytes([(uid[0]), uid[1]])
+            write = list_uid + len_com + com
+            em.sendall(write)
+            # data = self.client.recvfrom(1024,2) # Волшебная строчка!
+            read = em.recvfrom(2048)  # Было 1024
+            # Попробовать функцию recv
+            em.close()
+        except socket.timeout:
+            em.connect((self.host, self.port))
+            em.sendall(write)
+            read = em.recvfrom(2048)  # Было 1024
+            em.close()
         return [write, read[0]]
 
 

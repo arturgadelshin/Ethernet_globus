@@ -4,7 +4,7 @@ import socket
 #import send
 #import receive
 
-from GUI.calibrate import*
+from GUI.NEW_CALIBRATE import*
 from base_interface_function import*
 from send import len_command
 from parsing_ethernet import*

@@ -1,9 +1,8 @@
-from PyQt5.Qt import *
-from PyQt5 import QtWidgets, QtGui, QtCore
-from stages import *
-#from GUI.central_window import *
-from com_voltage_regulator import *
-from globus_ethernet import *
+from PyQt5.QtCore import Qt
+
+from GwInstek74303S.com_voltage_regulator import *
+from PyQt5 import QtWidgets, QtGui
+from PyQt5.QtWidgets import QComboBox, QGridLayout
 
 
 class GwINSTEKWindow(QtWidgets.QDialog):
@@ -80,3 +79,6 @@ class GwINSTEKWindow(QtWidgets.QDialog):
         VoltageRegulator.channel_em = channel_em
         VoltageRegulator.channel_calibrate = channel_calibrate
         self.close()
+
+
+
