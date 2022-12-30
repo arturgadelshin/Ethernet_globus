@@ -139,13 +139,14 @@ class Stages_03:
     pars = Parsing()  # Создание объекта Парсера, для распарсивания принятых пакетов
     recieve_data = WindowParsing()
     voltage_1 = 2.0
-    delta_1 = 10.0  # погрешность(%) в низу границы 2В
+    delta_1 = 10.0  # погрешность(%) внизу границы 2В
     voltage_2 = 16.0
-    delta_2 = 7.0  # погрешность(%) в середине границы 17В
+    delta_2 = 5.0  # погрешность(%) в середине границы 17В
     voltage_3 = 30.0
-    delta_3 = 5.0  # погрешность(%) в низу границы 30В
+    delta_3 = 3.0  # погрешность(%) внизу границы 30В
     count_channel_calibrate = 32  # Здесь должно быть 32 канала
-    count_bytes_in_one_channel = 16
+    count_bytes_in_one_channel = 16 + 4  # Где 4 на температуру
+    count_compare = 2
 
     def __init__(self):
         self.name_stage = 'Работа в одиночном режиме'
@@ -168,39 +169,46 @@ class Stages_03:
         # 8 байт - Frame, 24 байта - любых см. команду write_k_polinoms()
         undefined_bytes = 24  # Было 24 - решил убрать для экономии памяти
         k_polinoms = data[1][22 + 8 + undefined_bytes:]
-        k_polinoms = k_polinoms[0:self.count_channel_calibrate * self.count_bytes_in_one_channel]
-        list_polinoms = []
+        k_polinoms = k_polinoms[0:self.count_channel_calibrate * self.count_bytes_in_one_channel * self.count_compare]
+        # Первый блок коэффициентов для 1 компаратора
+        list_polinoms_1 = []
         # Переложим коэффициенты k_polinoms в список списков для удобства работы
         for i in range(0, self.count_channel_calibrate):
             row_polinoms = []
             for j in range(0, self.count_bytes_in_one_channel):
                 row_polinoms.append(k_polinoms[i * self.count_bytes_in_one_channel + j])
-            list_polinoms.append(row_polinoms)
+            list_polinoms_1.append(row_polinoms)
+
+        # Второй блок коэффициентов для 2 компаратора
+        list_polinoms_2 = []
+        # Переложим коэффициенты k_polinoms в список списков для удобства работы
+        for i in range(0, self.count_channel_calibrate):
+            row_polinoms = []
+            for j in range(0, self.count_bytes_in_one_channel):
+                row_polinoms.append(k_polinoms[640 + (i * self.count_bytes_in_one_channel + j)])
+            list_polinoms_2.append(row_polinoms)
         valid = True
-        # Должно быть с 0, поставил с 4 для отладки, так как кривые импульсы
-        for channel in range(0, count_channel_calibrate, 4):
+
+        for channel in range(0, count_channel_calibrate, 4):  # Шаг между каналами 4
             # Для первого уровня
             up_voltage_1 = voltage + delta_error * voltage / 100
             down_voltage_1 = voltage - delta_error * voltage / 100
             count = 0
 
-            # Вычислить откалиброванное напряжение
-            args = list_polinoms[channel]
-            y = -((int.from_bytes([args[1], args[0]], byteorder='big') / (10 ** 8)) * (float(voltage) ** 3)) + \
-                (int.from_bytes([args[3], args[2]], byteorder='big') / (10 ** 6)) * (float(voltage) ** 2) - \
-                (int.from_bytes([args[5], args[4]], byteorder='big') / (10 ** 5)) * float(voltage) + \
-                (int.from_bytes([args[7], args[6]], byteorder='big') / (10 ** 3))
+            # Вычислить откалиброванное напряжение для 1 компаратора
+            args = list_polinoms_1[channel]
+            y = ((int.from_bytes([args[3], args[2], args[1], args[0]], byteorder='big', signed=True) / (10 ** 8)) * (float(voltage) ** 3)) + \
+                (int.from_bytes([args[7], args[6], args[5], args[4]], byteorder='big', signed=True) / (10 ** 6)) * (float(voltage) ** 2) +\
+                (int.from_bytes([args[11], args[10], args[9], args[8]], byteorder='big', signed=True) / (10 ** 5)) * float(voltage) + \
+                (int.from_bytes([args[15], args[14], args[13], args[12]], byteorder='big', signed=True) / (10 ** 3))
             if y < 0:
                 add_log_file('НГ', f'Канал {channel}')
                 continue
             voltage_calibrate = float(format(float(voltage) / y, '.2f'))
             channel_volt = {str(channel + 1): [voltage_calibrate, voltage_calibrate]}
             voltage_regulator.set_calibrate_voltage(up_voltage_1)  # Задаем напряжение на источнике
-            while True:
-                up_voltage_1 = round(up_voltage_1, 2)
-                voltage_regulator.set_fast_voltage(up_voltage_1)  # Задаем напряжение на источнике
-                logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
-                # Маска контролируемых каналов побитово
+
+            def mask_channel(channel):
                 int_mask_channels = round(2 ** int(channel))
                 mask_channels = [0] * 4
                 if int_mask_channels < 255:
@@ -214,6 +222,14 @@ class Stages_03:
                 if 16777215 < int_mask_channels < 4294967295:
                     rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
                     mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
+                return mask_channels
+
+            while True:
+                up_voltage_1 = round(up_voltage_1, 2)
+                voltage_regulator.set_fast_voltage(up_voltage_1)  # Задаем напряжение на источнике
+                logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
+                # Маска контролируемых каналов побитово
+                mask_channels = mask_channel(channel)
                 mask = [0]*4
                 for i in range(0, 4):
                     mask[i] = logs[0][0][i] & mask_channels[i]
@@ -224,12 +240,12 @@ class Stages_03:
                     up_voltage_1 -= step_voltage
 
                 if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
-                    add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на выключение канала {channel+1}'
+                    add_log_file(f'Уровень 1 для {voltage}(В) компаратора 1 срабатывания - на выключение канала {channel+1}'
                                  f' равен {up_voltage_1}(В)')
                     time.sleep(2.0)
                     break
                 if up_voltage_1 <= down_voltage_1:
-                    add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на включение канала {channel+1}'
+                    add_log_file(f'Уровень 1 для {voltage}(В) компаратора 1 срабатывания - на выключение канала {channel+1}'
                                  f' не найден')
 
                     add_log_file('НГ', f'Уровень 1 для {voltage}')
@@ -237,29 +253,32 @@ class Stages_03:
                     time.sleep(2.0)
                     break
 
+            # Вычислить откалиброванное напряжение для 2 компаратора
+            args = list_polinoms_2[channel]
+            y = ((int.from_bytes([args[3], args[2], args[1], args[0]], byteorder='big', signed=True) / (10 ** 8)) * (
+                        float(voltage) ** 3)) + \
+                (int.from_bytes([args[7], args[6], args[5], args[4]], byteorder='big', signed=True) / (10 ** 6)) * (
+                            float(voltage) ** 2) + \
+                (int.from_bytes([args[11], args[10], args[9], args[8]], byteorder='big', signed=True) / (
+                            10 ** 5)) * float(voltage) + \
+                (int.from_bytes([args[15], args[14], args[13], args[12]], byteorder='big', signed=True) / (10 ** 3))
+            if y < 0:
+                add_log_file('НГ', f'Канал {channel}')
+                continue
+            # Вычислим новое напряжение(для 2 компаратора)
+            voltage_calibrate = float(format(float(voltage) / y, '.2f'))
+            channel_volt = {str(channel + 1): [voltage_calibrate, voltage_calibrate]}
             # Для второго уровня
             up_voltage_2 = voltage + delta_error * voltage / 100
             down_voltage_2 = voltage - delta_error * voltage / 100  # Берем нижнюю границы от предыдущего поиска сделал для ускорения поиска
             count = 0
-            voltage_regulator.set_calibrate_voltage(up_voltage_1)  # Задаем напряжение на источнике
+            voltage_regulator.set_calibrate_voltage(down_voltage_2)  # Задаем напряжение на источнике
             while True:
                 down_voltage_2 = round(down_voltage_2, 2)
                 voltage_regulator.set_fast_voltage(down_voltage_2)  # Задаем напряжение на источнике
                 logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
                 # Маска контролируемых каналов побитово
-                int_mask_channels = round(2 ** int(channel))
-                mask_channels = [0] * 4
-                if int_mask_channels < 255:
-                    mask_channels[0:4] = int_mask_channels, 0, 0, 0
-                if 255 < int_mask_channels < 65535:
-                    rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                    mask_channels[0:4] = rez[0], rez[1], 0, 0
-                if 65535 < int_mask_channels < 16777215:
-                    rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                    mask_channels[0:4] = rez[0], rez[1], rez[2], 0
-                if 16777215 < int_mask_channels < 4294967295:
-                    rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                    mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
+                mask_channels = mask_channel(channel)
                 mask = [0] * 4
                 for i in range(0, 4):
                     mask[i] = logs[0][1][i] & mask_channels[i]
@@ -270,12 +289,12 @@ class Stages_03:
                     down_voltage_2 += step_voltage
 
                 if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
-                    add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel+1}'
+                    add_log_file(f'Уровень 2 для {voltage}(В) компаратора 2 срабатывания - на включение канала {channel+1}'
                                  f' равен {down_voltage_2}(В)')
                     time.sleep(2.0)
                     break
                 if down_voltage_2 >= up_voltage_2:
-                    add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel+1}'
+                    add_log_file(f'Уровень 2 для {voltage}(В) компаратора 2 срабатывания - на включение канала {channel+1}'
                                  f' не найден')
                     add_log_file('НГ', f'Уровень 2 для {voltage}')
                     valid = False
@@ -296,7 +315,7 @@ class Stages_03:
     def parameter_01(self):
         """
         Здесь реализовать выдачу в ЦАП откалиброванных 2 вольт и
-        изменение напряжения на источнике с шагом 50 мВ.
+        изменение напряжения на источнике с шагом 20 мВ.
         Сделать маску на канал, будем ждать переключения канала
         :return:
         """
@@ -311,7 +330,7 @@ class Stages_03:
     def parameter_02(self):
         """
         Здесь реализовать выдачу в ЦАП откалиброванных 16 вольт и
-        изменение напряжения на источнике с шагом 50 мВ.
+        изменение напряжения на источнике с шагом 20 мВ.
         Сделать маску на канал, будем ждать переключения канала
         :return:
         """
@@ -326,7 +345,7 @@ class Stages_03:
     def parameter_03(self):
         """
         Здесь реализовать выдачу в ЦАП откалиброванных 30 вольт и
-        изменение напряжения на источнике с шагом 50 мВ.
+        изменение напряжения на источнике с шагом 20 мВ.
         Сделать маску на канал, будем ждать переключения канала
         :return:
         """

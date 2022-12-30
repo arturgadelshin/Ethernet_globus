@@ -58,15 +58,14 @@ class CalibrateThread(QtCore.QThread):
     count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
     count_channel_calibrate = 32  # Вернуть 32.
 
-
     def __init__(self, parent=None):
-        #self.running = False  # Флаг выполнения
+        # self.running = False  # Флаг выполнения
         QtCore.QThread.__init__(self, parent)
 
     def run(self):
         # set_voltage = Calibrate()
         voltages = CalibrateAutomaticWindow.voltages  # Получить напряжение из формы
-        step = CalibrateAutomaticWindow.step          # Получить шаг из формы
+        step = CalibrateAutomaticWindow.step  # Получить шаг из формы
 
         voltage_regulator = VoltageRegulator()  # Создать объект Regulator
         voltage_regulator.set_port()  # Задать порт
@@ -75,7 +74,6 @@ class CalibrateThread(QtCore.QThread):
 
         i = 0
 
-        level_off = 32.0  # 32В
         k_transformation = 11.05  # Расчетный коэффициент трансформации
         bit_depth_DAC = 12  # Разрядность ЦАПа
         ref_voltage = 3.3
@@ -83,111 +81,159 @@ class CalibrateThread(QtCore.QThread):
         reference_voltage = ref_voltage / max_code_DAC  # 1 единица кода, Вольт
         number_of_successful_operations = 25  # Задаем число успешных чтений подряд
         # flag_search_voltage = False
-
-        # voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        # voltage_regulator.set_port()  # Задать порт
         levels = []
         compare = CompareLevel()
+
+        def mask_channel(channel):
+            int_mask_channels = round(2 ** int(channel))
+            mask_channels = [0] * 4
+            if int_mask_channels < 255:
+                mask_channels[0:4] = int_mask_channels, 0, 0, 0
+            if 255 < int_mask_channels < 65535:
+                rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+                mask_channels[0:4] = rez[0], rez[1], 0, 0
+            if 65535 < int_mask_channels < 16777215:
+                rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+                mask_channels[0:4] = rez[0], rez[1], rez[2], 0
+            if 16777215 < int_mask_channels < 4294967295:
+                rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
+                mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
+            return mask_channels
+
+        # Здесь блок кода для запроса температуры с датчика
+        write = request_temperature()
+        Ethernet().swap(write)
+        time.sleep(3.0)
+        Ethernet().swap(write)
+        write = data_request(0)
+        data = Ethernet().swap(write)
+        rez_temp = data[1][-4:]
+        rez_temp = rez_temp[0:3]
+        if rez_temp[0] == 1:
+            int_temp = -(int.from_bytes(rez_temp[1:3], byteorder='little') + 1) * 0.0625
+            print(f'Температура: {int_temp}')
+        else:
+            int_temp = int.from_bytes(rez_temp[1:3], byteorder='little') * 0.0625
+            print(f'Температура: {int_temp}')
+
+
+
         for voltage in voltages:
             # Должно быть с 0, поставил с 4 для отладки, так как кривые импульсы
             for channel in range(0, self.count_channel_calibrate):
-                # Для первого уровня
-                up_voltage_1 = float(voltage)  # Задал верхний уровень, так как в реальности напряжение будет меньше
-                down_voltage_1 = float(voltage)/2  # Задал половину уровня, так как коэфф. калибровки
-                                                   #  в реальности не должен быть равен 2
-                count = 0
+                # Для 1 компаратора выключение
+                off_voltage_comp_1 = float(
+                    voltage)  # Задал верхний уровень, так как в реальности напряжение будет меньше
+                off_voltage_comp_2 = float(voltage)
+                down_voltage_1 = float(voltage) / 2  # Задал половину уровня, так как коэфф. калибровки
+                #  в реальности не должен быть равен 2
+                count_comp_1 = 0
+                count_comp_2 = 0
                 voltage_regulator.set_calibrate_voltage(float(voltage))  # Задаем напряжение на источнике, в первый раз
                 while True:
-                    up_voltage_1 = round(up_voltage_1, 2)
-                    channel_volt = {str(channel + 1): [up_voltage_1, up_voltage_1]}  # Формирование уровней
+                    off_voltage_comp_1 = round(off_voltage_comp_1, 2)
+                    off_voltage_comp_2 = round(off_voltage_comp_2, 2)
+                    channel_volt = {str(channel + 1): [off_voltage_comp_1, off_voltage_comp_2]}  # Формирование уровней
                     logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
                     # log_1 = int.from_bytes(logs[0][0], byteorder='big', signed=True)
                     # Маска контролируемых каналов побитово
-                    int_mask_channels = round(2 ** int(channel))
-
-                    mask_channels = [0] * 4
-                    if int_mask_channels < 255:
-                        mask_channels[0:4] = int_mask_channels, 0, 0, 0
-                    if 255 < int_mask_channels < 65535:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], 0, 0
-                    if 65535 < int_mask_channels < 16777215:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], 0
-                    if 16777215 < int_mask_channels < 4294967295:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
-                    mask = [0] * 4
+                    mask_channels = mask_channel(channel)
+                    mask_comp_1 = [0] * 4
+                    mask_comp_2 = [0] * 4
                     for i in range(0, 4):
-                        mask[i] = logs[0][0][i] & mask_channels[i]
-                    if mask == mask_channels:
-                        count += 1
+                        mask_comp_1[i] = logs[0][0][i] & mask_channels[i]
+                        mask_comp_2[i] = logs[0][1][i] & mask_channels[i]
+                    if mask_comp_1 == mask_channels:
+                        count_comp_1 += 1
                     else:
-                        count = 0
-                        up_voltage_1 -= step/100
+                        count_comp_1 = 0
+                        off_voltage_comp_1 -= step / 100
 
-                    if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
+                    if mask_comp_2 == mask_channels:
+                        count_comp_2 += 1
+                    else:
+                        count_comp_2 = 0
+                        off_voltage_comp_2 -= step / 100
+
+                    if count_comp_1 >= number_of_successful_operations and \
+                            count_comp_2 >= number_of_successful_operations:  # Количество успешных срабатываний подряд
                         levels.append(channel_volt)  # Запомним в список текущий уровень срабатывания
+                        add_log_file(
+                            f'Уровень 1 (1 компаратор) для {voltage}(В) срабатывания - на выключение канала {channel + 1}'
+                            f' равен {off_voltage_comp_1}(В)')
+                        add_log_file(
+                            f'Уровень 1 (2 компаратор) для {voltage}(В) срабатывания - на выключение канала {channel + 1}'
+                            f' равен {off_voltage_comp_2}(В)')
+                        break
+
+                    if off_voltage_comp_1 <= down_voltage_1 or off_voltage_comp_2 <= down_voltage_1:
+                        levels.append({str(channel + 1): [0, 0]})
                         add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на выключение канала {channel + 1}'
-                                     f' равен {up_voltage_1}(В)')
-                        break
-                    if up_voltage_1 <= down_voltage_1:
-                        levels.append({str(channel + 1): [0, level_off]})
-                        add_log_file(f'Уровень 1 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
                                      f' не найден')
                         break
-                # Для второго уровня
-                up_voltage_2 = float(voltage)
-                down_voltage_2 = float(voltage)/2  # Берем нижнюю границы от предыдущего поиска сделал для ускорения поиска
-                count = 0
+
+                # Для включения
+                up_voltage_2_1 = float(voltage)  # Задал верхний уровень, так как в реальности напряжение будет меньше
+                on_voltage_comp_1 = off_voltage_comp_1  # Задал уровень из верхнего цикла, считаем что он был выключен теперь
+                # включаем
+                on_voltage_comp_2 = off_voltage_comp_2
+                count_comp_1 = 0
+                count_comp_2 = 0
+
                 while True:
-                    down_voltage_2 = round(down_voltage_2, 2)
-                    channel_volt = {str(channel + 1): [down_voltage_2, down_voltage_2]}
+                    on_voltage_comp_1 = round(on_voltage_comp_1, 2)
+                    on_voltage_comp_2 = round(on_voltage_comp_2, 2)
 
+                    channel_volt = {str(channel + 1): [on_voltage_comp_1, on_voltage_comp_2]}
                     logs = compare.compare_level(0, **channel_volt)  # Выполнение разового компарирования
-                    # log_2 = int.from_bytes(logs[0][1], byteorder='big', signed=True)
+
                     # Маска контролируемых каналов побитово
-                    int_mask_channels = round(2 ** int(channel))
+                    mask_channels = mask_channel(channel)
+                    mask_comp_1 = [0] * 4
+                    mask_comp_2 = [0] * 4
 
-                    mask_channels = [0] * 4
-                    if int_mask_channels < 255:
-                        mask_channels[0:4] = int_mask_channels, 0, 0, 0
-                    if 255 < int_mask_channels < 65535:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], 0, 0
-                    if 65535 < int_mask_channels < 16777215:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], 0
-                    if 16777215 < int_mask_channels < 4294967295:
-                        rez = int_mask_channels.to_bytes((int_mask_channels.bit_length() + 7) // 8, 'little')
-                        mask_channels[0:4] = rez[0], rez[1], rez[2], rez[3]
-                    mask = [0] * 4
                     for i in range(0, 4):
-                        mask[i] = logs[0][1][i] & mask_channels[i]
-                    if mask != mask_channels:
-                        count += 1
-                    else:
-                        count = 0
-                        down_voltage_2 += step/100
+                        mask_comp_1[i] = logs[0][0][i] & mask_channels[i]
+                        mask_comp_2[i] = logs[0][1][i] & mask_channels[i]
 
-                    if count == number_of_successful_operations:  # Количество успешных срабатываний подряд
+                    if mask_comp_1 != mask_channels:
+                        count_comp_1 += 1
+                    else:
+                        count_comp_1 = 0
+                        on_voltage_comp_1 += step / 100
+
+                    if mask_comp_2 != mask_channels:
+                        count_comp_2 += 1
+                    else:
+                        count_comp_2 = 0
+                        on_voltage_comp_2 += step / 100
+
+                    if count_comp_1 >= number_of_successful_operations and \
+                            count_comp_2 >= number_of_successful_operations:  # Количество успешных срабатываний подряд
                         levels.append(channel_volt)  # Запомним в список текущий уровень срабатывания
-                        add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
-                                     f' равен {down_voltage_2}(В)')
+                        add_log_file(
+                            f'Уровень 2 (1 компаратор) для {voltage}(В) срабатывания - на включение канала {channel + 1}'
+                            f' равен {on_voltage_comp_1}(В)')
+                        add_log_file(
+                            f'Уровень 2 (2 компаратор) для {voltage}(В) срабатывания - на включение канала {channel + 1}'
+                            f' равен {on_voltage_comp_2}(В)')
                         break
-                    if down_voltage_2 >= up_voltage_2:
-                        levels.append({str(channel + 1): [level_off, 0]})
+
+                    if on_voltage_comp_1 >= up_voltage_2_1 or on_voltage_comp_1 >= up_voltage_2_1:
+                        levels.append({str(channel + 1): [0, 0]})
                         add_log_file(f'Уровень 2 для {voltage}(В) срабатывания - на включение канала {channel + 1}'
                                      f' не найден')
                         break
 
-                code_dac_1 = round(up_voltage_1/ k_transformation/ reference_voltage)
-                code_dac_2 = round(down_voltage_2 / k_transformation / reference_voltage)
-                self.thread_data.emit([0, 0, code_dac_1, code_dac_2], channel, 0, voltage)
-                i += 1
-                self.thread_signal.emit(i)  # Для прогрессбара
+                code_dac_1_low_1 = round(off_voltage_comp_1 / k_transformation / reference_voltage)
+                code_dac_2_low_2 = round(off_voltage_comp_2 / k_transformation / reference_voltage)
+                code_dac_1_up_1 = round(on_voltage_comp_1 / k_transformation / reference_voltage)
+                code_dac_2_up_2 = round(on_voltage_comp_2 / k_transformation / reference_voltage)
+                self.thread_data.emit([0, 0, code_dac_1_low_1, code_dac_2_low_2,
+                                       code_dac_1_up_1, code_dac_2_up_2, int_temp], channel, 0, voltage)
+            i += 1
+            self.thread_signal.emit(i)  # Для прогрессбара
         voltage_regulator.power(0)  # Выключить питание после выполнения калибровки
-
 
 
 class CalibrateWindow(QtWidgets.QWidget):
@@ -225,7 +271,6 @@ class CalibrateWindow(QtWidgets.QWidget):
         self.nullblock.addStretch()
         self.layout.addLayout(self.nullblock, 0, 0)
         self.layout.addWidget(QHLine(), 1, 0)  # ГОРИЗОНТАЛЬНЫЙ РАЗДЕЛИТЕЛЬ
-
 
         # Блок первый
         self.oneblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
@@ -268,7 +313,6 @@ class CalibrateWindow(QtWidgets.QWidget):
 
         self.oneblock.addStretch(100)
         self.layout.addLayout(self.oneblock, 2, 0, 1, 0)
-
 
         # Блок второй
 
@@ -317,11 +361,10 @@ class CalibrateWindow(QtWidgets.QWidget):
         # Вывод содержимого сетки на экран
         self.setLayout(self.layout)
 
-
     def set_voltage(self):
         # set_voltage = Calibrate()
-        addr_IP = self.add_addr_IP.text()       # Получить введенное значение в поле
-        port_IP = self.add_port_IP.text()       # Получить введенное значение в поле
+        addr_IP = self.add_addr_IP.text()  # Получить введенное значение в поле
+        port_IP = self.add_port_IP.text()  # Получить введенное значение в поле
         voltage = self.voltage_calibrate.text()
         # Установка addr и port
         Ethernet.port = int(port_IP)
@@ -333,7 +376,7 @@ class CalibrateWindow(QtWidgets.QWidget):
             com_port.exec_()
 
         voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        #if GwINSTEKWindow.flag_setting == 0:  # Чтобы второй раз не устанавливать настройки COM
+        # if GwINSTEKWindow.flag_setting == 0:  # Чтобы второй раз не устанавливать настройки COM
         voltage_regulator.set_port()  # Задать порт
         voltage_regulator.set_calibrate_voltage(float(voltage))  # управлять входным напряжением
 
@@ -370,12 +413,11 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     table_df = 0
 
     # Создание пустого массива размером 32 - каналы - 8 уровни напряжений
-    #np.zeros((32, 8))
-
+    # np.zeros((32, 8))
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        #self.resize(600, 100)
+        # self.resize(600, 100)
         self.counter = 0
         self.layout = QGridLayout()  # Создание сетки - Основная
 
@@ -393,7 +435,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.port_IP.setFixedWidth(150)
         # self.port_IP.setContentsMargins(10, 0, 0, 0)
         self.add_port_IP = QtWidgets.QLineEdit()
-        #self.port_IP.setContentsMargins(20,0,0,0)
+        # self.port_IP.setContentsMargins(20,0,0,0)
         self.add_port_IP.setFixedWidth(50)
         self.add_port_IP.setInputMask('DDDD')
         self.add_port_IP.setText('1233')
@@ -407,12 +449,10 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.layout.addLayout(self.nullblock, 0, 0)
         self.layout.addWidget(QHLine(), 1, 0)  # ГОРИЗОНТАЛЬНЫЙ РАЗДЕЛИТЕЛЬ
 
-
         # Блок первый
         self.layout.addWidget(self.channels_group(), 2, 0)
         self.layout.addWidget(self.step_group(), 2, 1)
         self.setWindowTitle('Автоматическая калибровка')
-
 
         # Блок второй
         self.twoblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
@@ -429,14 +469,12 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_comport.clicked.connect(self.run_automatic_calibrate)
         self.button_run_automatic_calibrate.clicked.connect(self.run_thread)
 
-        #self.twoblock.addStretch(100)
+        # self.twoblock.addStretch(100)
         self.layout.addLayout(self.twoblock, 3, 0)
-
-
 
         # Третий блок с таблицей
         self.threeblock = QtWidgets.QHBoxLayout()
-        self.table = QTableWidget(256, 8)
+        self.table = QTableWidget(256, 14)  # Второе число кол-во столбцов
         self.vbox = QtWidgets.QVBoxLayout()
 
         self.button_export = QtWidgets.QPushButton("Экспорт в *.xlsx")
@@ -449,7 +487,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_write_k_polinoms.setFont(QtGui.QFont("Times", 10))
         self.button_write_k_polinoms.setFixedWidth(200)
         self.button_write_k_polinoms.clicked.connect(self.write_k_polinoms)
-        self.button_write_k_polinoms.setEnabled(False)  # Заблокировать кнопку
+        self.button_write_k_polinoms.setEnabled(True)  # Заблокировать кнопку
 
         self.button_graf = QtWidgets.QPushButton("Показать график")
         self.button_graf.setFont(QtGui.QFont("Times", 10))
@@ -463,14 +501,15 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.vbox.addStretch()  # Пружина
 
         # Set the table headers
-        self.table.setHorizontalHeaderLabels(["N", "Channel", "Voltage", "Vector", "Code_1", "Code_2", "Avg_Code", "K_calibrate",])
+        self.table.setHorizontalHeaderLabels(["N", "Channel", "Voltage", "Vector",
+                                              "Code_1_LOW", "Code_1_UP", "Avg_1_CODE",
+                                              "Code_2_LOW", "Code_2_UP", "Avg_2_CODE",
+                                              "K_calibrate_1", "K_calibrate_2", "K_calibrate_Avg", "Temp"])
 
-
-        #self.table.resizeColumnsToContents()
+        # self.table.resizeColumnsToContents()
         self.threeblock.addWidget(self.table)
         self.layout.addLayout(self.threeblock, 4, 0)
         self.layout.addLayout(self.vbox, 4, 1)
-
 
         # Ниже описание и настройка потока для работы с ЭМ1
         self.automatic_calibrate_thread = CalibrateThread()  # Содаем экземпляр класса StageThread
@@ -485,7 +524,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         # Ниже создан прогресс бар
         self.fourblock = QtWidgets.QHBoxLayout()
         self.progress_bar = QtWidgets.QProgressBar()
-        count = CalibrateThread.count_channel_calibrate*CalibrateThread.count_voltage_step
+        count = CalibrateThread.count_channel_calibrate * CalibrateThread.count_voltage_step
         self.progress_bar.setRange(0, count)
         self.fourblock.addWidget(self.progress_bar)
         self.layout.addLayout(self.fourblock, 5, 0)
@@ -496,45 +535,45 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
     def channels_group(self):
         groupBox = QGroupBox("Задайте уровни калибровки от наименьшего к наибольшему")
         groupBox.setFont(QtGui.QFont("Times", 10))
-        #groupBox.resize(600,100)
+        # groupBox.resize(600,100)
         self.voltage_1_label = QtWidgets.QLabel('1 уровень,(В)')
         self.voltage_1 = QtWidgets.QLineEdit()
         self.voltage_1.setText('2')
-        #self.voltage_1.setFixedWidth(30)
+        # self.voltage_1.setFixedWidth(30)
 
         self.voltage_2_label = QtWidgets.QLabel('2 уровень,(В)')
         self.voltage_2 = QtWidgets.QLineEdit()
-        #self.voltage_2.setFixedWidth(30)
+        # self.voltage_2.setFixedWidth(30)
         self.voltage_2.setText('6')
 
         self.voltage_3_label = QtWidgets.QLabel('3 уровень,(В)')
         self.voltage_3 = QtWidgets.QLineEdit()
-        #self.voltage_3.setFixedWidth(30)
+        # self.voltage_3.setFixedWidth(30)
         self.voltage_3.setText('10')
 
         self.voltage_4_label = QtWidgets.QLabel('4 уровень,(В)')
         self.voltage_4 = QtWidgets.QLineEdit()
-        #self.voltage_4.setFixedWidth(30)
+        # self.voltage_4.setFixedWidth(30)
         self.voltage_4.setText('14')
 
         self.voltage_5_label = QtWidgets.QLabel('5 уровень,(В)')
         self.voltage_5 = QtWidgets.QLineEdit()
-        #self.voltage_5.setFixedWidth(30)
+        # self.voltage_5.setFixedWidth(30)
         self.voltage_5.setText('18')
 
         self.voltage_6_label = QtWidgets.QLabel('6 уровень,(В)')
         self.voltage_6 = QtWidgets.QLineEdit()
-        #self.voltage_6.setFixedWidth(30)
+        # self.voltage_6.setFixedWidth(30)
         self.voltage_6.setText('22')
 
         self.voltage_7_label = QtWidgets.QLabel('7 уровень,(В)')
         self.voltage_7 = QtWidgets.QLineEdit()
-        #self.voltage_7.setFixedWidth(30)
+        # self.voltage_7.setFixedWidth(30)
         self.voltage_7.setText('26')
 
         self.voltage_8_label = QtWidgets.QLabel('8 уровень,(В)')
         self.voltage_8 = QtWidgets.QLineEdit()
-        #self.voltage_8.setFixedWidth(30)
+        # self.voltage_8.setFixedWidth(30)
         self.voltage_8.setText('30')
 
         vbox_1 = QtWidgets.QVBoxLayout()
@@ -637,7 +676,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         self.button_export.setEnabled(True)  # Разблокировать кнопку
         self.button_graf.setEnabled(True)  # Разблокировать кнопку
         self.button_write_k_polinoms.setEnabled(True)  # Разблокировать кнопку
-        #self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
+        # self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
 
     def on_change(self, i):  # Принимаем число из потока в Progressbar
         self.progress_bar.setValue(i)
@@ -648,19 +687,35 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
     def table_update(self, data, number, vector, voltage):
         self.channel = int(number)
-        self.table.setItem((32*self.counter)+number, 0, QTableWidgetItem(str((32*self.counter)+number)))
-        self.table.setItem((32*self.counter)+number, 1, QTableWidgetItem(str(self.channel+1)))
-        self.table.setItem((32*self.counter)+number, 2, QTableWidgetItem(str(voltage)))
-        self.table.setItem((32*self.counter)+number, 3, QTableWidgetItem(str(vector)))
-        self.table.setItem((32*self.counter)+number, 4, QTableWidgetItem(str(int(data[2]))))
-        self.table.setItem((32*self.counter)+number, 5, QTableWidgetItem(str(int(data[3]))))
-        average_code = (data[2]+data[3])/2
-        self.table.setItem((32*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
+        self.table.setItem((32 * self.counter) + number, 0, QTableWidgetItem(str((32 * self.counter) + number)))
+        self.table.setItem((32 * self.counter) + number, 1, QTableWidgetItem(str(self.channel + 1)))
+        self.table.setItem((32 * self.counter) + number, 2, QTableWidgetItem(str(voltage)))
+        self.table.setItem((32 * self.counter) + number, 3, QTableWidgetItem(str(vector)))
+        self.table.setItem((32 * self.counter) + number, 4, QTableWidgetItem(str(int(data[2]))))
+        self.table.setItem((32 * self.counter) + number, 5, QTableWidgetItem(str(int(data[4]))))
+        self.table.setItem((32 * self.counter) + number, 7, QTableWidgetItem(str(int(data[3]))))
+        self.table.setItem((32 * self.counter) + number, 8, QTableWidgetItem(str(int(data[5]))))
+        average_code_1 = (data[2] + data[4]) / 2
+        self.table.setItem((32 * self.counter) + number, 6, QTableWidgetItem(str(average_code_1)))
+        average_code_2 = (data[3] + data[5]) / 2
+        self.table.setItem((32 * self.counter) + number, 9, QTableWidgetItem(str(average_code_2)))
+
         try:
-            k_calibrate = (float(voltage)/11.05)/((3.3*round(average_code))/4095)
+            k_calibrate_1 = (float(voltage) / 11.05) / ((3.3 * round(average_code_1)) / 4095)
         except ZeroDivisionError:
-            k_calibrate = 0
-        self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(format(k_calibrate, '.2f')))
+            k_calibrate_1 = 0
+        self.table.setItem((32 * self.counter) + number, 10, QTableWidgetItem(format(k_calibrate_1, '.2f')))
+        try:
+            k_calibrate_2 = (float(voltage) / 11.05) / ((3.3 * round(average_code_2)) / 4095)
+        except ZeroDivisionError:
+            k_calibrate_2 = 0
+        self.table.setItem((32 * self.counter) + number, 11, QTableWidgetItem(format(k_calibrate_2, '.2f')))
+        try:
+            k_calibrate_avg = round((k_calibrate_1 + k_calibrate_2) / 2, 2)
+        except ZeroDivisionError:
+            k_calibrate_avg = 0
+        self.table.setItem((32 * self.counter) + number, 12, QTableWidgetItem(format(k_calibrate_avg, '.2f')))
+        self.table.setItem((32 * self.counter) + number, 13, QTableWidgetItem(format(data[6], '.2f')))
         if number == 31:
             self.counter += 1
 
@@ -668,14 +723,24 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         voltage_regulator = VoltageRegulator()  # Создать объект Regulator
         voltage_regulator.set_port()  # Задать порт
         voltage_regulator.power_em()  # Подать питание
-        rows = self.table.rowCount()
-        k_polinoms = []
-        for i in range(0, rows):
-            if self.table.model().index(i, 7).data() == None:
-                k_polinoms.append(float(0))  # где 7 - индекс столбца K_kalibrate в таблице table
-            else:
-                k_polinoms.append(float(self.table.model().index(i, 7).data()))  # где 7 - индекс столбца K_kalibrate в таблице table
-        write_rom = write_k_polinoms(k_polinoms)  # Запись в ПЗУ
+        # rows = self.table.rowCount()
+        # k_polinoms = []
+        # for i in range(0, rows):
+        #     if self.table.model().index(i, 10).data() is None:
+        #         k_polinoms.append(float(0))
+        #         # где 10 - индекс столбца K_kalibrate_1 в таблице table
+        #     else:
+        #         k_polinoms.append(float(self.table.model().index(i, 10).data()))
+        #         # где 10 - индекс столбца K_kalibrate_1 в таблице table
+        #
+        # for i in range(0, rows):
+        #     if self.table.model().index(i, 11).data() is None:
+        #         k_polinoms.append(float(0))  # где 11 - индекс столбца K_kalibrate_2 в таблице table
+        #     else:
+        #         k_polinoms.append(float(self.table.model().index(i, 11).data()))
+        #         # где 11 - индекс столбца K_kalibrate_2 в таблице table
+
+        write_rom = write_k_polinoms()  # Запись в ПЗУ
         add_log_file("Запись калибровочных коэффициентов")
         data = Ethernet().swap(write_rom)
         add_log_file(data[0])  # Запись в лог, какие коэффициенты записали
@@ -691,7 +756,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
 
         # 8 байт - Frame, 24 байта - любых см. команду write_k_kalibrate()
         undefined_bytes = 24  # Было 24 - решил убрать для экономии памяти
-        k_polinoms = data[1][22+8+undefined_bytes:]
+        k_polinoms = data[1][22 + 8 + undefined_bytes:]
         # Выцепляем из команды записанные коэффициенты
         write_massive_k_kalibrate = write_rom[2 + undefined_bytes:]
         valid = True
@@ -718,9 +783,9 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         voltage_regulator.power(0)
 
     def closeEvent(self, event):
-        self.hide()                                      # Скрываем окно
-        self.automatic_calibrate_thread.wait(2000)       # Время чтобы закончить
-        event.accept()                                   # Закрываем окно
+        self.hide()  # Скрываем окно
+        self.automatic_calibrate_thread.wait(2000)  # Время чтобы закончить
+        event.accept()  # Закрываем окно
 
     def export_calibrate(self):
         exportToExcel(self)
@@ -730,26 +795,322 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
         grafic_window.show()
         grafic_window.exec_()  # Не знаю как, но это работает
 
-    # @staticmethod
-    # def split_list(arr, size):
-    #     arrs = []
-    #     while len(arr) > size:
-    #         pice = arr[:size]
-    #         arrs.append(pice)
-    #         arr = arr[size:]
-    #     arrs.append(arr)
-    #     return arrs
-
     def return_table(self):
-        data_voltage = [self.table.item(row, 2).text()           # 2 - столбец с напряжением
+        data_voltage = [self.table.item(row, 2).text()  # 2 - столбец с напряжением
                         for row in range(self.table.rowCount())
                         if self.table.item(row, 2) is not None]  # 2 - столбец с напряжением
 
-        data_k_calibrate = [self.table.item(row, 7).text()              # 7 - столбец с коэф. калибровки
-                            for row in range(self.table.rowCount())
-                            if self.table.item(row, 7) is not None]      # 7 - столбец с коэф. калибровки
+        data_k_calibrate_1 = [self.table.item(row, 10).text()  # 10 - столбец с коэф. калибровки 1
+                              for row in range(self.table.rowCount())
+                              if self.table.item(row, 10) is not None]  # 10 - столбец с коэф. калибровки 1
 
-        table = {'Voltage': data_voltage, 'K_kalibrate': data_k_calibrate}
+        data_k_calibrate_2 = [self.table.item(row, 11).text()  # 11 - столбец с коэф. калибровки 2
+                              for row in range(self.table.rowCount())
+                              if self.table.item(row, 11) is not None]  # 11 - столбец с коэф. калибровки 2
+        temp = [self.table.item(row, 13).text()  # 13 - столбец с коэф. калибровки 2
+                for row in range(self.table.rowCount())
+                if self.table.item(row, 13) is not None]  # 13 - столбец с коэф. калибровки 2
+
+        # Здесь уже по-человечески переложить данные и записать в таблицу
+        list_voltages = []
+        for i in range(0, self.table.rowCount(), 32):
+            list_voltages.append(data_voltage[i])
+
+        list_ch_1_k_1 = []
+        for i in range(0, self.table.rowCount(), 32):
+            list_ch_1_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_1_k_2 = []
+        for i in range(0, self.table.rowCount(), 32):
+            list_ch_1_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_2_k_1 = []
+        for i in range(1, self.table.rowCount(), 32):
+            list_ch_2_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_2_k_2 = []
+        for i in range(1, self.table.rowCount(), 32):
+            list_ch_2_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_3_k_1 = []
+        for i in range(2, self.table.rowCount(), 32):
+            list_ch_3_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_3_k_2 = []
+        for i in range(2, self.table.rowCount(), 32):
+            list_ch_3_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_4_k_1 = []
+        for i in range(3, self.table.rowCount(), 32):
+            list_ch_4_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_4_k_2 = []
+        for i in range(3, self.table.rowCount(), 32):
+            list_ch_4_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_5_k_1 = []
+        for i in range(4, self.table.rowCount(), 32):
+            list_ch_5_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_5_k_2 = []
+        for i in range(4, self.table.rowCount(), 32):
+            list_ch_5_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_6_k_1 = []
+        for i in range(5, self.table.rowCount(), 32):
+            list_ch_6_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_6_k_2 = []
+        for i in range(5, self.table.rowCount(), 32):
+            list_ch_6_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_7_k_1 = []
+        for i in range(6, self.table.rowCount(), 32):
+            list_ch_7_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_7_k_2 = []
+        for i in range(6, self.table.rowCount(), 32):
+            list_ch_7_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_8_k_1 = []
+        for i in range(7, self.table.rowCount(), 32):
+            list_ch_8_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_8_k_2 = []
+        for i in range(7, self.table.rowCount(), 32):
+            list_ch_8_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_9_k_1 = []
+        for i in range(8, self.table.rowCount(), 32):
+            list_ch_9_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_9_k_2 = []
+        for i in range(8, self.table.rowCount(), 32):
+            list_ch_9_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_10_k_1 = []
+        for i in range(9, self.table.rowCount(), 32):
+            list_ch_10_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_10_k_2 = []
+        for i in range(9, self.table.rowCount(), 32):
+            list_ch_10_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_11_k_1 = []
+        for i in range(10, self.table.rowCount(), 32):
+            list_ch_11_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_11_k_2 = []
+        for i in range(10, self.table.rowCount(), 32):
+            list_ch_11_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_12_k_1 = []
+        for i in range(11, self.table.rowCount(), 32):
+            list_ch_12_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_12_k_2 = []
+        for i in range(11, self.table.rowCount(), 32):
+            list_ch_12_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_13_k_1 = []
+        for i in range(12, self.table.rowCount(), 32):
+            list_ch_13_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_13_k_2 = []
+        for i in range(12, self.table.rowCount(), 32):
+            list_ch_13_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_14_k_1 = []
+        for i in range(13, self.table.rowCount(), 32):
+            list_ch_14_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_14_k_2 = []
+        for i in range(13, self.table.rowCount(), 32):
+            list_ch_14_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_15_k_1 = []
+        for i in range(14, self.table.rowCount(), 32):
+            list_ch_15_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_15_k_2 = []
+        for i in range(14, self.table.rowCount(), 32):
+            list_ch_15_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_16_k_1 = []
+        for i in range(15, self.table.rowCount(), 32):
+            list_ch_16_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_16_k_2 = []
+        for i in range(15, self.table.rowCount(), 32):
+            list_ch_16_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_17_k_1 = []
+        for i in range(16, self.table.rowCount(), 32):
+            list_ch_17_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_17_k_2 = []
+        for i in range(16, self.table.rowCount(), 32):
+            list_ch_17_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_18_k_1 = []
+        for i in range(17, self.table.rowCount(), 32):
+            list_ch_18_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_18_k_2 = []
+        for i in range(17, self.table.rowCount(), 32):
+            list_ch_18_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_19_k_1 = []
+        for i in range(18, self.table.rowCount(), 32):
+            list_ch_19_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_19_k_2 = []
+        for i in range(18, self.table.rowCount(), 32):
+            list_ch_19_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_20_k_1 = []
+        for i in range(19, self.table.rowCount(), 32):
+            list_ch_20_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_20_k_2 = []
+        for i in range(19, self.table.rowCount(), 32):
+            list_ch_20_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_21_k_1 = []
+        for i in range(20, self.table.rowCount(), 32):
+            list_ch_21_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_21_k_2 = []
+        for i in range(20, self.table.rowCount(), 32):
+            list_ch_21_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_22_k_1 = []
+        for i in range(21, self.table.rowCount(), 32):
+            list_ch_22_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_22_k_2 = []
+        for i in range(21, self.table.rowCount(), 32):
+            list_ch_22_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_23_k_1 = []
+        for i in range(22, self.table.rowCount(), 32):
+            list_ch_23_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_23_k_2 = []
+        for i in range(22, self.table.rowCount(), 32):
+            list_ch_23_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_24_k_1 = []
+        for i in range(23, self.table.rowCount(), 32):
+            list_ch_24_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_24_k_2 = []
+        for i in range(23, self.table.rowCount(), 32):
+            list_ch_24_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_25_k_1 = []
+        for i in range(24, self.table.rowCount(), 32):
+            list_ch_25_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_25_k_2 = []
+        for i in range(24, self.table.rowCount(), 32):
+            list_ch_25_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_26_k_1 = []
+        for i in range(25, self.table.rowCount(), 32):
+            list_ch_26_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_26_k_2 = []
+        for i in range(25, self.table.rowCount(), 32):
+            list_ch_26_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_27_k_1 = []
+        for i in range(26, self.table.rowCount(), 32):
+            list_ch_27_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_27_k_2 = []
+        for i in range(26, self.table.rowCount(), 32):
+            list_ch_27_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_28_k_1 = []
+        for i in range(27, self.table.rowCount(), 32):
+            list_ch_28_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_28_k_2 = []
+        for i in range(27, self.table.rowCount(), 32):
+            list_ch_28_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_29_k_1 = []
+        for i in range(28, self.table.rowCount(), 32):
+            list_ch_29_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_29_k_2 = []
+        for i in range(28, self.table.rowCount(), 32):
+            list_ch_29_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_30_k_1 = []
+        for i in range(29, self.table.rowCount(), 32):
+            list_ch_30_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_30_k_2 = []
+        for i in range(29, self.table.rowCount(), 32):
+            list_ch_30_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_31_k_1 = []
+        for i in range(30, self.table.rowCount(), 32):
+            list_ch_31_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_31_k_2 = []
+        for i in range(30, self.table.rowCount(), 32):
+            list_ch_31_k_2.append(data_k_calibrate_2[i])
+
+        list_ch_32_k_1 = []
+        for i in range(31, self.table.rowCount(), 32):
+            list_ch_32_k_1.append(data_k_calibrate_1[i])
+
+        list_ch_32_k_2 = []
+        for i in range(31, self.table.rowCount(), 32):
+            list_ch_32_k_2.append(data_k_calibrate_2[i])
+
+        list_temp = []
+        for i in range(31, self.table.rowCount(), 32):
+            list_temp.append(temp[i])
+
+        table = {'Voltage': list_voltages,
+                 'Ch_1_k_1': list_ch_1_k_1, 'Ch_1_k_2': list_ch_1_k_2,
+                 'Ch_2_k_1': list_ch_2_k_1, 'Ch_2_k_2': list_ch_2_k_2,
+                 'Ch_3_k_1': list_ch_3_k_1, 'Ch_3_k_2': list_ch_3_k_2,
+                 'Ch_4_k_1': list_ch_4_k_1, 'Ch_4_k_2': list_ch_4_k_2,
+                 'Ch_5_k_1': list_ch_5_k_1, 'Ch_5_k_2': list_ch_5_k_2,
+                 'Ch_6_k_1': list_ch_6_k_1, 'Ch_6_k_2': list_ch_6_k_2,
+                 'Ch_7_k_1': list_ch_7_k_1, 'Ch_7_k_2': list_ch_7_k_2,
+                 'Ch_8_k_1': list_ch_8_k_1, 'Ch_8_k_2': list_ch_8_k_2,
+                 'Ch_9_k_1': list_ch_9_k_1, 'Ch_9_k_2': list_ch_9_k_2,
+                 'Ch_10_k_1': list_ch_10_k_1, 'Ch_10_k_2': list_ch_10_k_2,
+                 'Ch_11_k_1': list_ch_11_k_1, 'Ch_11_k_2': list_ch_11_k_2,
+                 'Ch_12_k_1': list_ch_12_k_1, 'Ch_12_k_2': list_ch_12_k_2,
+                 'Ch_13_k_1': list_ch_13_k_1, 'Ch_13_k_2': list_ch_13_k_2,
+                 'Ch_14_k_1': list_ch_14_k_1, 'Ch_14_k_2': list_ch_14_k_2,
+                 'Ch_15_k_1': list_ch_15_k_1, 'Ch_15_k_2': list_ch_15_k_2,
+                 'Ch_16_k_1': list_ch_16_k_1, 'Ch_16_k_2': list_ch_16_k_2,
+                 'Ch_17_k_1': list_ch_17_k_1, 'Ch_17_k_2': list_ch_17_k_2,
+                 'Ch_18_k_1': list_ch_18_k_1, 'Ch_18_k_2': list_ch_18_k_2,
+                 'Ch_19_k_1': list_ch_19_k_1, 'Ch_19_k_2': list_ch_19_k_2,
+                 'Ch_20_k_1': list_ch_20_k_1, 'Ch_20_k_2': list_ch_20_k_2,
+                 'Ch_21_k_1': list_ch_21_k_1, 'Ch_21_k_2': list_ch_21_k_2,
+                 'Ch_22_k_1': list_ch_22_k_1, 'Ch_22_k_2': list_ch_22_k_2,
+                 'Ch_23_k_1': list_ch_23_k_1, 'Ch_23_k_2': list_ch_23_k_2,
+                 'Ch_24_k_1': list_ch_24_k_1, 'Ch_24_k_2': list_ch_24_k_2,
+                 'Ch_25_k_1': list_ch_25_k_1, 'Ch_25_k_2': list_ch_25_k_2,
+                 'Ch_26_k_1': list_ch_26_k_1, 'Ch_26_k_2': list_ch_26_k_2,
+                 'Ch_27_k_1': list_ch_27_k_1, 'Ch_27_k_2': list_ch_27_k_2,
+                 'Ch_28_k_1': list_ch_28_k_1, 'Ch_28_k_2': list_ch_28_k_2,
+                 'Ch_29_k_1': list_ch_29_k_1, 'Ch_29_k_2': list_ch_29_k_2,
+                 'Ch_30_k_1': list_ch_30_k_1, 'Ch_30_k_2': list_ch_30_k_2,
+                 'Ch_31_k_1': list_ch_31_k_1, 'Ch_31_k_2': list_ch_31_k_2,
+                 'Ch_32_k_1': list_ch_32_k_1, 'Ch_32_k_2': list_ch_32_k_2,
+                 'Temp': list_temp,
+                 }
         df = pd.DataFrame(table)
         # create excel writer
         writer = pd.ExcelWriter('table_for_grafics.xlsx')
@@ -763,7 +1124,7 @@ class SetVoltageRegulatorWindow(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        #self.resize(300, 300)
+        # self.resize(300, 300)
 
         self.layout = QGridLayout()  # Создание сетки - Основная
         # Блок первый
@@ -805,7 +1166,6 @@ class SetVoltageRegulatorWindow(QtWidgets.QDialog):
         self.close()
 
 
-
 class SearchThread(QtCore.QThread):
     thread_signal = QtCore.pyqtSignal(int)
     thread_data = QtCore.pyqtSignal(list, int, int, str)
@@ -814,7 +1174,7 @@ class SearchThread(QtCore.QThread):
     count_bytes_in_one_channel = 16
 
     def __init__(self, parent=None):
-        #self.running = False  # Флаг выполнения
+        # self.running = False  # Флаг выполнения
         QtCore.QThread.__init__(self, parent)
 
     def run(self):
@@ -822,8 +1182,8 @@ class SearchThread(QtCore.QThread):
         voltages = MeasurementErrorWindow.voltages  # Получить напряжение из формы
 
         voltage_regulator = VoltageRegulator()  # Создать объект Regulator
-        voltage_regulator.set_port()            # Задать порт
-        voltage_regulator.power_em()            # Подать питание
+        voltage_regulator.set_port()  # Задать порт
+        voltage_regulator.power_em()  # Подать питание
         i = 0
         flag_dac_1 = False
         flag_dac_2 = False
@@ -837,21 +1197,21 @@ class SearchThread(QtCore.QThread):
         # 8 байт - Frame, 24 байта - любых см. команду write_k_polinoms()
         undefined_bytes = 24  # Было 24 - решил убрать для экономии памяти
         k_polinoms = data[1][22 + 8 + undefined_bytes:]
-        k_polinoms = k_polinoms[0:self.count_channel_calibrate*self.count_bytes_in_one_channel]
+        k_polinoms = k_polinoms[0:self.count_channel_calibrate * self.count_bytes_in_one_channel]
         list_polinoms = []
         list_error = []
         # Переложим коэффициенты k_polinoms в список списков для удобства работы
         for i in range(0, self.count_channel_calibrate):
             row_polinoms = []
             for j in range(0, self.count_bytes_in_one_channel):
-                row_polinoms.append(k_polinoms[i*self.count_bytes_in_one_channel+j])
+                row_polinoms.append(k_polinoms[i * self.count_bytes_in_one_channel + j])
             list_polinoms.append(row_polinoms)
         for voltage in voltages:
             voltage_regulator.set_calibrate_voltage(float(voltage))  # Управлять входным напряжением
             for channel in range(0, self.count_channel_calibrate):
                 error = MeasurementErrorWindow.error  # Получить начальную ошибку из формы
                 # Вычислить откалиброванное напряжение
-                #list_polinoms.append(voltage)
+                # list_polinoms.append(voltage)
                 args = list_polinoms[channel]
                 y = (int.from_bytes([args[1], args[0]], byteorder='big') / (10 ** 8)) * (float(voltage) ** 3) + \
                     (int.from_bytes([args[3], args[2]], byteorder='big') / (10 ** 6)) * (float(voltage) ** 2) + \
@@ -861,9 +1221,9 @@ class SearchThread(QtCore.QThread):
 
                 # Пока флаг не найден
                 while (flag_search_compare == False) or (error >= 0):
-                    voltage_down = round(voltage_calibrate - ((voltage_calibrate*error)/100), 2)
-                    voltage_up = round(voltage_calibrate + ((voltage_calibrate*error)/100), 2)
-                    levels = {str(channel+1): [voltage_down, voltage_up]}
+                    voltage_down = round(voltage_calibrate - ((voltage_calibrate * error) / 100), 2)
+                    voltage_up = round(voltage_calibrate + ((voltage_calibrate * error) / 100), 2)
+                    levels = {str(channel + 1): [voltage_down, voltage_up]}
                     logs = compare_level.compare_level(0, **levels)
                     log_1 = logs[0]
                     log_2 = logs[1]
@@ -892,16 +1252,16 @@ class SearchThread(QtCore.QThread):
 
                 i += 1
                 self.thread_signal.emit(i)  # Для прогрессбара
-        voltage_regulator.power(0)          # Выключить питание после выполнения калибровки
+        voltage_regulator.power(0)  # Выключить питание после выполнения калибровки
 
     @staticmethod
     def calculate_k_polinoms(*args, voltage):
         print(voltage)
-        y = ((float(args[0])/(10 ** 8))*float(args[-1])**3) + \
-            ((float(args[1])/(10**6))*float(args[-1])**2) + \
-            ((float(args[2])/(10**5))*float(args[-1])) +\
+        y = ((float(args[0]) / (10 ** 8)) * float(args[-1]) ** 3) + \
+            ((float(args[1]) / (10 ** 6)) * float(args[-1]) ** 2) + \
+            ((float(args[2]) / (10 ** 5)) * float(args[-1])) + \
             float(args[3])
-        rez = args[-1]/y
+        rez = args[-1] / y
         return format(rez, '.2f')
 
 
@@ -911,7 +1271,7 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        #self.resize(600, 100)
+        # self.resize(600, 100)
         self.counter = 0
         self.layout = QGridLayout()  # Создание сетки - Основная
 
@@ -929,7 +1289,7 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         self.port_IP.setFixedWidth(150)
         # self.port_IP.setContentsMargins(10, 0, 0, 0)
         self.add_port_IP = QtWidgets.QLineEdit()
-        #self.port_IP.setContentsMargins(20,0,0,0)
+        # self.port_IP.setContentsMargins(20,0,0,0)
         self.add_port_IP.setFixedWidth(50)
         self.add_port_IP.setInputMask('DDDD')
         self.add_port_IP.setText('1233')
@@ -943,12 +1303,10 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         self.layout.addLayout(self.nullblock, 0, 0)
         self.layout.addWidget(QHLine(), 1, 0)  # ГОРИЗОНТАЛЬНЫЙ РАЗДЕЛИТЕЛЬ
 
-
         # Блок первый
         self.layout.addWidget(self.channels_group(), 2, 0)
         self.layout.addWidget(self.error_group(), 2, 1)
         self.setWindowTitle('Оценка погрешностей')
-
 
         # Блок второй
         self.twoblock = QtWidgets.QHBoxLayout()  # Создаем горизонтальный контейнер 1
@@ -965,9 +1323,8 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         self.button_comport.clicked.connect(self.setting_port)
         self.button_run_search_error.clicked.connect(self.run_thread)
 
-        #self.twoblock.addStretch(100)
+        # self.twoblock.addStretch(100)
         self.layout.addLayout(self.twoblock, 3, 0)
-
 
         # Третий блок с таблицей
         self.threeblock = QtWidgets.QHBoxLayout()
@@ -1000,12 +1357,10 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         # Set the table headers
         self.table.setHorizontalHeaderLabels(["N", "Channel", "Voltage", "Code_1", "Code_2", "Avg_Code", "Error"])
 
-
-        #self.table.resizeColumnsToContents()
+        # self.table.resizeColumnsToContents()
         self.threeblock.addWidget(self.table)
         self.layout.addLayout(self.threeblock, 4, 0)
         self.layout.addLayout(self.vbox, 4, 1)
-
 
         # Ниже описание и настройка потока для работы с ЭМ1
         self.automatic_search_thread = SearchThread()  # Содаем экземпляр класса StageThread
@@ -1020,7 +1375,7 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         # Ниже создан прогресс бар
         self.fourblock = QtWidgets.QHBoxLayout()
         self.progress_bar = QtWidgets.QProgressBar()
-        count = CalibrateThread.count_channel_calibrate*CalibrateThread.count_voltage_step
+        count = CalibrateThread.count_channel_calibrate * CalibrateThread.count_voltage_step
         self.progress_bar.setRange(0, count)
         self.fourblock.addWidget(self.progress_bar)
         self.layout.addLayout(self.fourblock, 5, 0)
@@ -1031,45 +1386,45 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
     def channels_group(self):
         groupBox = QGroupBox("Задайте уровни для оценки от наименьшего к наибольшему")
         groupBox.setFont(QtGui.QFont("Times", 10))
-        #groupBox.resize(600,100)
+        # groupBox.resize(600,100)
         self.voltage_1_label = QtWidgets.QLabel('1 уровень,(В)')
         self.voltage_1 = QtWidgets.QLineEdit()
         self.voltage_1.setText('2')
-        #self.voltage_1.setFixedWidth(30)
+        # self.voltage_1.setFixedWidth(30)
 
         self.voltage_2_label = QtWidgets.QLabel('2 уровень,(В)')
         self.voltage_2 = QtWidgets.QLineEdit()
-        #self.voltage_2.setFixedWidth(30)
+        # self.voltage_2.setFixedWidth(30)
         self.voltage_2.setText('6')
 
         self.voltage_3_label = QtWidgets.QLabel('3 уровень,(В)')
         self.voltage_3 = QtWidgets.QLineEdit()
-        #self.voltage_3.setFixedWidth(30)
+        # self.voltage_3.setFixedWidth(30)
         self.voltage_3.setText('10')
 
         self.voltage_4_label = QtWidgets.QLabel('4 уровень,(В)')
         self.voltage_4 = QtWidgets.QLineEdit()
-        #self.voltage_4.setFixedWidth(30)
+        # self.voltage_4.setFixedWidth(30)
         self.voltage_4.setText('14')
 
         self.voltage_5_label = QtWidgets.QLabel('5 уровень,(В)')
         self.voltage_5 = QtWidgets.QLineEdit()
-        #self.voltage_5.setFixedWidth(30)
+        # self.voltage_5.setFixedWidth(30)
         self.voltage_5.setText('18')
 
         self.voltage_6_label = QtWidgets.QLabel('6 уровень,(В)')
         self.voltage_6 = QtWidgets.QLineEdit()
-        #self.voltage_6.setFixedWidth(30)
+        # self.voltage_6.setFixedWidth(30)
         self.voltage_6.setText('22')
 
         self.voltage_7_label = QtWidgets.QLabel('7 уровень,(В)')
         self.voltage_7 = QtWidgets.QLineEdit()
-        #self.voltage_7.setFixedWidth(30)
+        # self.voltage_7.setFixedWidth(30)
         self.voltage_7.setText('26')
 
         self.voltage_8_label = QtWidgets.QLabel('8 уровень,(В)')
         self.voltage_8 = QtWidgets.QLineEdit()
-        #self.voltage_8.setFixedWidth(30)
+        # self.voltage_8.setFixedWidth(30)
         self.voltage_8.setText('30')
 
         vbox_1 = QtWidgets.QVBoxLayout()
@@ -1170,8 +1525,8 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
         self.return_table()
         self.button_export.setEnabled(True)  # Разблокировать кнопку
         self.button_graf.setEnabled(True)  # Разблокировать кнопку
-        #self.button_write_k_calibrate.setEnabled(True)  # Разблокировать кнопку
-        #self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
+        # self.button_write_k_calibrate.setEnabled(True)  # Разблокировать кнопку
+        # self.automatic_calibrate_thread.yieldCurrentThread()  # Принудительное завершение потока
 
     def on_change(self, i):  # Принимаем число из потока в Progressbar
         self.progress_bar.setValue(i)
@@ -1182,27 +1537,26 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
 
     def table_update(self, data, number, vector, voltage):
         self.channel = int(number)
-        self.table.setItem((32*self.counter)+number, 0, QTableWidgetItem(str((32*self.counter)+number)))
-        self.table.setItem((32*self.counter)+number, 1, QTableWidgetItem(str(self.channel+1)))
-        self.table.setItem((32*self.counter)+number, 2, QTableWidgetItem(str(voltage)))
-        self.table.setItem((32*self.counter)+number, 3, QTableWidgetItem(str(vector)))
-        self.table.setItem((32*self.counter)+number, 4, QTableWidgetItem(str(int(data[2]))))
-        self.table.setItem((32*self.counter)+number, 5, QTableWidgetItem(str(int(data[3]))))
-        average_code = (data[2]+data[3])/2
-        self.table.setItem((32*self.counter)+number, 6, QTableWidgetItem(str(average_code)))
+        self.table.setItem((32 * self.counter) + number, 0, QTableWidgetItem(str((32 * self.counter) + number)))
+        self.table.setItem((32 * self.counter) + number, 1, QTableWidgetItem(str(self.channel + 1)))
+        self.table.setItem((32 * self.counter) + number, 2, QTableWidgetItem(str(voltage)))
+        self.table.setItem((32 * self.counter) + number, 3, QTableWidgetItem(str(vector)))
+        self.table.setItem((32 * self.counter) + number, 4, QTableWidgetItem(str(int(data[2]))))
+        self.table.setItem((32 * self.counter) + number, 5, QTableWidgetItem(str(int(data[3]))))
+        average_code = (data[2] + data[3]) / 2
+        self.table.setItem((32 * self.counter) + number, 6, QTableWidgetItem(str(average_code)))
         try:
-            k_calibrate = (float(voltage)/11.05)/((3.3*round(average_code))/4095)
+            k_calibrate = (float(voltage) / 11.05) / ((3.3 * round(average_code)) / 4095)
         except ZeroDivisionError:
             k_calibrate = 0
-        self.table.setItem((32*self.counter)+number, 7, QTableWidgetItem(format(k_calibrate, '.2f')))
+        self.table.setItem((32 * self.counter) + number, 7, QTableWidgetItem(format(k_calibrate, '.2f')))
         if number == 31:
             self.counter += 1
 
-
     def closeEvent(self, event):
-        self.hide()                                      # Скрываем окно
-        self.automatic_search_thread.wait(2000)       # Время чтобы закончить
-        event.accept()                                   # Закрываем окно
+        self.hide()  # Скрываем окно
+        self.automatic_search_thread.wait(2000)  # Время чтобы закончить
+        event.accept()  # Закрываем окно
 
     def export_calibrate(self):
         exportToExcel(self)
@@ -1223,13 +1577,13 @@ class MeasurementErrorWindow(QtWidgets.QWidget):
     #     return arrs
 
     def return_table(self):
-        data_voltage = [self.table.item(row, 2).text()           # 2 - столбец с напряжением
+        data_voltage = [self.table.item(row, 2).text()  # 2 - столбец с напряжением
                         for row in range(self.table.rowCount())
                         if self.table.item(row, 2) is not None]  # 2 - столбец с напряжением
 
-        data_k_calibrate = [self.table.item(row, 7).text()              # 7 - столбец с коэф. калибровки
+        data_k_calibrate = [self.table.item(row, 7).text()  # 7 - столбец с коэф. калибровки
                             for row in range(self.table.rowCount())
-                            if self.table.item(row, 7) is not None]      # 7 - столбец с коэф. калибровки
+                            if self.table.item(row, 7) is not None]  # 7 - столбец с коэф. калибровки
 
         table = {'Voltage': data_voltage, 'K_kalibrate': data_k_calibrate}
         df = pd.DataFrame(table)
