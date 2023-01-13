@@ -17,15 +17,19 @@ class GraficWindow(QDialog):
         self.figure = plt.figure(figsize=(20, 15))
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
-        self.button = QPushButton('Построить график')
-        self.button.clicked.connect(self.plot)
+        self.button_comp_1 = QPushButton('Построить график компаратора 1')
+        self.button_comp_1.clicked.connect(self.plot_comp_1)
+        self.button_comp_2 = QPushButton('Построить график компаратора 2')
+        self.button_comp_2.clicked.connect(self.plot_comp_2)
+
         layout = QVBoxLayout()
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
-        layout.addWidget(self.button)
+        layout.addWidget(self.button_comp_1)
+        layout.addWidget(self.button_comp_2)
         self.setLayout(layout)
 
-    def plot(self):
+    def plot_comp_1(self):
         df = pd.read_excel('table_for_grafics.xlsx')
         data_table_calibrate = df.copy()
         data_1_channel = DataFrame()
@@ -215,3 +219,6 @@ class GraficWindow(QDialog):
         plt.legend(loc='best', fontsize=6)
 
         self.canvas.draw()
+
+    def plot_comp_2(self):
+        ...

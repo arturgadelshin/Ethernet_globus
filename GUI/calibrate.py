@@ -105,6 +105,7 @@ class CalibrateThread(QtCore.QThread):
         Ethernet().swap(write)
         time.sleep(3.0)
         Ethernet().swap(write)
+        time.sleep(3.0)
         write = data_request(0)
         data = Ethernet().swap(write)
         rez_temp = data[1][-4:]

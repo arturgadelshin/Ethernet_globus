@@ -37,7 +37,7 @@ def serial_ports():
 
 class VoltageRegulator:
     speeds = ['1200', '2400', '4800', '9600', '19200', '38400', '57600', '115200']
-    comport = 'COM3'
+    comport = 'COM7'
     speed = '9600'
     channel_em = 1
     channel_calibrate = 2
