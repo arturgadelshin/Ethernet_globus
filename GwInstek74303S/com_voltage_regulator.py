@@ -100,6 +100,7 @@ class VoltageRegulator:
         time.sleep(5.0)
 
     def port_close(self):
+
         self.port.close()
 
     def set_fast_voltage(self, voltage):

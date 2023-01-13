@@ -55,7 +55,7 @@ from loggings import *
 class CalibrateThread(QtCore.QThread):
     thread_signal = QtCore.pyqtSignal(int)
     thread_data = QtCore.pyqtSignal(list, int, int, str)
-    count_voltage_step = 8  # так как 8 напряжений калибровки калибровки
+    count_voltage_step = 8  # так как 8 напряжений калибровки
     count_channel_calibrate = 32  # Вернуть 32.
 
     def __init__(self, parent=None):
@@ -111,12 +111,10 @@ class CalibrateThread(QtCore.QThread):
         rez_temp = rez_temp[0:3]
         if rez_temp[0] == 1:
             int_temp = -(int.from_bytes(rez_temp[1:3], byteorder='little') + 1) * 0.0625
-            print(f'Температура: {int_temp}')
+            #print(f'Температура: {int_temp}')
         else:
             int_temp = int.from_bytes(rez_temp[1:3], byteorder='little') * 0.0625
-            print(f'Температура: {int_temp}')
-
-
+            #print(f'Температура: {int_temp}')
 
         for voltage in voltages:
             # Должно быть с 0, поставил с 4 для отладки, так как кривые импульсы
@@ -764,7 +762,7 @@ class CalibrateAutomaticWindow(QtWidgets.QWidget):
             if (k_polinoms[i]) != write_massive_k_kalibrate[i]:
                 valid = False
 
-        if valid == True:
+        if valid:
             msg_box = QMessageBox(QtWidgets.QMessageBox.Information,
                                   "Запись коээфициентов выполнена:",
                                   "Успешно!",
