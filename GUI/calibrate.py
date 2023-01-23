@@ -111,6 +111,7 @@ class CalibrateThread(QtCore.QThread):
         rez_temp = data[1][-4:]
         rez_temp = rez_temp[0:3]
         if rez_temp[0] == 1:
+            rez_temp = rez_temp[0:2]
             int_temp = -(int.from_bytes(rez_temp[1:3], byteorder='little') + 1) * 0.0625
             #print(f'Температура: {int_temp}')
         else:
